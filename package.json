@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "name": "nextjs",
+=======
+  "name": "print-service",
+>>>>>>> ba869e8 (Initial commit from Create Next App)
   "version": "0.1.0",
   "private": true,
   "scripts": {
