@@ -1,4 +1,5 @@
-import Image from "next/image";
+"use client";
+
 import { useState } from "react";
 
 export default function Home() {
@@ -11,7 +12,7 @@ export default function Home() {
     setLoading(true);
     
     try {
-      const response = await fetch('YOUR_RAILWAY_URL/api/scrape-pinterest', {
+      const response = await fetch('https://www.printspo.ca/api/scrape-pinterest', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -20,16 +21,17 @@ export default function Home() {
       });
       
       const data = await response.json();
-      setImages(data.images);
+      console.log('Received data:', data); // For debugging
+      setImages(data.images || []);
     } catch (error) {
-      console.error('Error fetching images:', error);
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen p-8">
       <main className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-center">Pinterest Board to Print</h1>
         
@@ -53,15 +55,17 @@ export default function Home() {
           </div>
         </form>
 
+        {loading && (
+          <div className="text-center">Loading images...</div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {images.map((image, index) => (
-            <div key={index} className="aspect-[3/4] relative overflow-hidden rounded-lg">
-              <Image
+          {images.map((image: any, index: number) => (
+            <div key={index} className="aspect-[3/4] relative overflow-hidden rounded-lg bg-gray-100">
+              <img
                 src={image.url}
                 alt={image.alt || 'Pinterest image'}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                className="object-cover w-full h-full"
               />
             </div>
           ))}
