@@ -38,8 +38,11 @@ export async function POST(request: Request) {
     // Return the extracted images
     return NextResponse.json({ images });
   } catch (error: unknown) {
-    const errorMessage = (error as Error).message || 'Failed to scrape Pinterest board';
-    console.error('Error scraping Pinterest board:', error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Failed to process request';
+    
+    console.error('Error:', error);
     return NextResponse.json(
       { error: errorMessage },
       { status: 500 }
