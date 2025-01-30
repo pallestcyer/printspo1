@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 export async function POST(request: Request) {
   try {
     const { url } = await request.json();
     console.log('Received URL:', url);
 
-    if (!url || !url.includes('pinterest.com')) {
+    // Validate the URL
+    const validatePinterestUrl = (url: string) => {
+      return url.includes('pinterest.com') && url.trim() !== '';
+    };
+
+    if (!validatePinterestUrl(url)) {
       console.error('Invalid URL:', url);
       return NextResponse.json(
         { error: 'Valid Pinterest board URL is required' },
@@ -13,30 +20,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await fetch('http://www.printspo.ca/api/scrape-pinterest', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url }),
+    // Fetch the Pinterest page
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+
+    // Extract image URLs (skip the first image)
+    const images: { url: string; alt: string }[] = [];
+    $('img').each((index, element) => {
+      if (index === 0) return; // Skip the first image (profile picture)
+      const src = $(element).attr('src');
+      const alt = $(element).attr('alt') || '';
+      if (src) {
+        images.push({ url: src, alt });
+      }
     });
 
-    console.log('Response from external API:', response);
-
-    if (!response.ok) {
-      throw new Error(`External API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Data received from external API:', data);
-
-    if (!data.images || !Array.isArray(data.images)) {
-      throw new Error('Invalid response format from external API');
-    }
-
-    return NextResponse.json(data);
+    // Return the extracted images
+    return NextResponse.json({ images });
   } catch (error) {
     console.error('Error scraping Pinterest board:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to scrape Pinterest board';
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    );
   }
 }
