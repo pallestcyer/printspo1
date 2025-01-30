@@ -1,57 +1,42 @@
-import { NextResponse } from 'next/server'
-import cheerio from 'cheerio'
+import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { url } = await request.json()
+    const { url } = await request.json();
+    console.log('Received URL:', url);
 
-    if (!url) {
+    if (!url || !url.includes('pinterest.com')) {
+      console.error('Invalid URL:', url);
       return NextResponse.json(
-        { error: 'Pinterest board URL is required' },
+        { error: 'Valid Pinterest board URL is required' },
         { status: 400 }
-      )
+      );
     }
 
-    const response = await fetch(url, {
+    const response = await fetch('http://www.printspo.ca/api/scrape-pinterest', {
+      method: 'POST',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    })
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
+    });
+
+    console.log('Response from external API:', response);
 
     if (!response.ok) {
-      return NextResponse.json(
-        { error: 'Failed to fetch Pinterest board' },
-        { status: response.status }
-      )
+      throw new Error(`External API returned ${response.status}`);
     }
 
-    const html = await response.text()
-    const $ = cheerio.load(html)
-    
-    // Find all image elements (Pinterest uses specific classes for their images)
-    const images = []
-    $('img.hCL.kVc.L4E.MIw').each((_, element) => {
-      const img = $(element)
-      const src = img.attr('src')
-      if (src) {
-        images.push({
-          url: src,
-          alt: img.attr('alt') || '',
-          width: img.attr('width'),
-          height: img.attr('height')
-        })
-      }
-    })
+    const data = await response.json();
+    console.log('Data received from external API:', data);
 
-    // Limit to first 20 images
-    const limitedImages = images.slice(0, 20)
+    if (!data.images || !Array.isArray(data.images)) {
+      throw new Error('Invalid response format from external API');
+    }
 
-    return NextResponse.json({ images: limitedImages })
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error scraping Pinterest board:', error)
-    return NextResponse.json(
-      { error: 'Failed to process Pinterest board' },
-      { status: 500 }
-    )
+    console.error('Error scraping Pinterest board:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
