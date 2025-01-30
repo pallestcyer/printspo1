@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+<<<<<<< HEAD
 type ImageType = {
   url: string;
   alt?: string;
@@ -12,6 +13,19 @@ const PinterestGrid = () => {
   const [error, setError] = useState<string>('');
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
 
+=======
+interface Image {
+  url: string;
+  alt: string;
+}
+
+const PinterestGrid = () => {
+  const [url, setUrl] = useState('');
+  const [images, setImages] = useState<Image[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+>>>>>>> 0cf31df (fix)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -33,7 +47,15 @@ const PinterestGrid = () => {
       const data = await response.json();
       setImages(data.images);
     } catch (err) {
+<<<<<<< HEAD
       setError((err as Error).message);
+=======
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
+>>>>>>> 0cf31df (fix)
     } finally {
       setLoading(false);
     }

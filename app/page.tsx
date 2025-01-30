@@ -11,6 +11,7 @@ type ImageType = {
 };
 
 const Home = () => {
+<<<<<<< HEAD
   const [url, setUrl] = useState('');
   const [images, setImages] = useState<ImageType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,15 +30,40 @@ const Home = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+=======
+  const [url, setUrl] = useState<string>('');
+  const [images, setImages] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [selectedImages, setSelectedImages] = useState<Set<any>>(new Set());
+
+  const validatePinterestUrl = (url: string) => {
+    console.log('Validating URL:', url);
+    return url.includes('pinterest.com') && url.trim() !== '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+>>>>>>> 0cf31df (fix)
     e.preventDefault();
     setLoading(true);
     setError('');
+<<<<<<< HEAD
+=======
+    console.log('Form submitted with URL:', url);
+>>>>>>> 0cf31df (fix)
 
     if (!validatePinterestUrl(url)) {
       setError('Please enter a valid Pinterest board URL');
+      console.error('Invalid URL:', url);
       return;
     }
 
+<<<<<<< HEAD
+=======
+    setLoading(true);
+    console.log('Loading images...');
+
+>>>>>>> 0cf31df (fix)
     try {
       const response = await fetch('/api/scrape', {
         method: 'POST',
@@ -47,16 +73,36 @@ const Home = () => {
         body: JSON.stringify({ url }),
       });
 
+<<<<<<< HEAD
+=======
+      console.log('Response received:', response);
+
+>>>>>>> 0cf31df (fix)
       if (!response.ok) {
         throw new Error('Failed to fetch images');
       }
 
       const data = await response.json();
+<<<<<<< HEAD
       setImages(data.images);
     } catch (err) {
       setError((err as Error).message);
+=======
+      console.log('Data received from API:', data);
+
+      if (!data.images || !Array.isArray(data.images)) {
+        throw new Error('Invalid response format');
+      }
+
+      setImages(data.images);
+      console.log('Images set:', data.images);
+    } catch (error) {
+      console.error('Error:', error);
+      setError((error as Error).message || 'Failed to load images. Please try again.');
+>>>>>>> 0cf31df (fix)
     } finally {
       setLoading(false);
+      console.log('Loading finished.');
     }
   };
 
@@ -64,8 +110,10 @@ const Home = () => {
     const newSelection = new Set(selectedImages);
     if (newSelection.has(index)) {
       newSelection.delete(index);
+      console.log('Image deselected:', index);
     } else {
       newSelection.add(index);
+      console.log('Image selected:', index);
     }
     setSelectedImages(newSelection);
   };
