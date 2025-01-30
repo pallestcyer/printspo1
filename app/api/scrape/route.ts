@@ -40,7 +40,6 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     const errorMessage = (error as Error).message || 'Failed to scrape Pinterest board';
     console.error('Error scraping Pinterest board:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to scrape Pinterest board';
     return NextResponse.json(
       { error: errorMessage },
       { status: 500 }
