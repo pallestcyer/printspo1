@@ -38,11 +38,12 @@ export async function POST(request: Request) {
     // Return the extracted images
     return NextResponse.json({ images });
   } catch (error: unknown) {
+    // Only ONE errorMessage declaration needed
     const errorMessage = error instanceof Error 
       ? error.message 
-      : 'Failed to process request';
-    
-    console.error('Error:', error);
+      : 'Failed to scrape Pinterest board';
+
+    console.error('Error scraping Pinterest board:', error);
     return NextResponse.json(
       { error: errorMessage },
       { status: 500 }
