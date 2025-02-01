@@ -1,13 +1,19 @@
+// tailwind.config.ts
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
+  darkMode: 'class',
   content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './pages/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './app/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {
+      colors: {
+        border: 'hsl(var(--border))',
+      },
       keyframes: {
         'fade-in': {
           '0%': { opacity: '0' },
@@ -29,7 +35,29 @@ const config: Config = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    require('@tailwindcss/aspect-ratio'),
+    function ({ addComponents }: { addComponents: any }) {
+      addComponents({
+        '.grid-layout': {
+          gridAutoRows: '1fr',
+          '& > *': {
+            minHeight: '0',
+          }
+        }
+      })
+    }
+  ],
 }
 
+// tailwind.config.ts
+safelist: [
+  {
+    pattern: /grid-cols-(2|3|4|5|6)/,
+  },
+  {
+    pattern: /aspect-(square|\[4\/5\]|\[3\/2\])/,
+  },
+]
 export default config

@@ -62,14 +62,27 @@ const PinterestGrid = () => {
       {error && <p className="text-red-500">{error}</p>}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {images.map((img, index) => (
-          <div key={index} className="overflow-hidden rounded-lg shadow-lg">
-            <img src={img.url} alt={img.alt} className="w-full h-auto" />
-          </div>
-        ))}
+        {images.map((img, index) => {
+          const imageKey = `${img.url}-${index}`; // Unique key by combining URL and index
+          const aspectRatio = img.url.includes('16x9') ? 'aspect-[16/9]' : 'aspect-[4/3]'; // Adjust this logic
+
+          return (
+            <div
+              key={imageKey}
+              className={`relative overflow-hidden rounded-lg shadow-lg ${aspectRatio}`}
+            >
+              <img
+                src={img.url}
+                alt={img.alt || 'Pinterest image'}
+                className="w-full h-full object-cover absolute top-0 left-0"
+              />
+            </div>
+          );
+        })}
       </div>
+
     </div>
   );
 };
 
-export default PinterestGrid; 
+export default PinterestGrid;

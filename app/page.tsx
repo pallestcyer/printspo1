@@ -1,103 +1,78 @@
 "use client";
 import React, { useState } from 'react';
-import { AlertCircle, Loader2, Image as ImageIcon, CheckCircle2, Info } from 'lucide-react';
+import { AlertCircle, Loader2, CheckCircle2, Info } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
-import Masonry from 'react-masonry-css';
+import PhotoLayoutGrid from '@/components/PhotoLayoutGrid';
 
-type ImageType = {
+interface ScrapedImage {
   url: string;
-  alt?: string;
-};
+  alt: string;
+}
 
-const Home = () => {
+export default function Home() {
   const [url, setUrl] = useState('');
-  const [images, setImages] = useState<ImageType[]>([]);
+  const [scrapedImages, setScrapedImages] = useState<ScrapedImage[]>([]);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedImages, setSelectedImages] = useState(new Set<number>());
-
-  const breakpointColumns = {
-    default: 4,
-    1100: 3,
-    700: 2,
-    500: 1
-  };
-
-  const validatePinterestUrl = (url: string): boolean => {
-    return url.includes('pinterest.com') && url.trim() !== '';
-  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
-    if (!validatePinterestUrl(url)) {
-      setError('Please enter a valid Pinterest board URL');
-      console.error('Invalid URL:', url);
-      return;
-    }
+    setScrapedImages([]);
 
     try {
       const response = await fetch('/api/scrape', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to fetch images');
+        throw new Error(data.error || 'Pinterest responded with an error');
       }
 
-      const data = await response.json();
-      setImages(data.images);
+      if (!data.images?.length) {
+        throw new Error('Found images but none met quality requirements');
+      }
+
+      setScrapedImages(data.images);
+      setSelectedIndices([0, 1, 2, 3]);
     } catch (err) {
-      setError((err as Error).message);
+      const error = err as Error;
+      setError(error.message);
+      console.error('Fetch error:', {
+        error: error.message,
+        url,
+        stack: error.stack,
+      });
     } finally {
       setLoading(false);
-      console.log('Loading finished.');
     }
   };
 
   const toggleImageSelection = (index: number) => {
-    const newSelection = new Set(selectedImages);
-    if (newSelection.has(index)) {
-      newSelection.delete(index);
-      console.log('Image deselected:', index);
-    } else {
-      newSelection.add(index);
-      console.log('Image selected:', index);
-    }
-    setSelectedImages(newSelection);
+    setSelectedIndices(prev =>
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      {/* Debug section */}
-      {/* Removed the debug grid test */}
-      {/* <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-        <div className="bg-red-500 p-4">Grid Test 1</div>
-        <div className="bg-blue-500 p-4">Grid Test 2</div>
-        <div className="bg-green-500 p-4">Grid Test 3</div>
-        <div className="bg-yellow-500 p-4">Grid Test 4</div>
-      </div> */}
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
             Pinterest Board to Print
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Transform your Pinterest inspiration into beautiful, high-quality prints. Perfect for mood boards, 
-            interior design, or creative projects.
+            Transform your Pinterest inspiration into beautiful, high-quality prints.
           </p>
         </div>
 
-        {/* URL Input Section */}
         <Card className="max-w-3xl mx-auto mb-12 border-2 border-gray-100 shadow-lg">
           <CardContent className="p-6">
             <div className="flex items-center gap-2 mb-4 text-gray-600">
@@ -134,69 +109,60 @@ const Home = () => {
         </Card>
 
         {error && (
-          <Alert variant="destructive" className="max-w-3xl mx-auto mb-8 animate-slide-down">
+          <Alert variant="destructive" className="max-w-3xl mx-auto mb-8">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        {/* Image Grid Section */}
-        {images.length > 0 && (
-          <div className="space-y-8 animate-fade-in">
-            <Masonry
-              breakpointCols={breakpointColumns}
-              className="flex gap-4 w-full"
-              columnClassName="gap-4"
-            >
-              {images.map((image: ImageType, index) => (
-                <div
-                  key={index}
-                  onClick={() => toggleImageSelection(index)}
-                  className="mb-4 break-inside-avoid group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all cursor-pointer transform hover:scale-105"
-                >
-                  <img
-                    src={image.url}
-                    alt={image.alt || 'Pinterest image'}
-                    className="w-full h-auto object-cover"
-                  />
-                  <div className={`absolute inset-0 transition-all ${
-                    selectedImages.has(index)
-                      ? 'bg-black/40'
-                      : 'bg-black/0 group-hover:bg-black/20'
-                  }`}>
-                    {selectedImages.has(index) && (
-                      <div className="absolute top-4 right-4">
+        {scrapedImages.length > 0 && (
+          <div className="space-y-6">
+            <h3 className="text-2xl font-bold">Select Images for Print ({selectedIndices.length} chosen)</h3>
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 overflow-x-auto pb-4">
+              {scrapedImages.map((image, index) => {
+                const isSelected = selectedIndices.includes(index);
+                return (
+                  <div
+                    key={image.url}
+                    onClick={() => toggleImageSelection(index)}
+                    className={`relative aspect-[16/9] cursor-pointer transition-all group ${isSelected ? 'ring-2 ring-blue-500 scale-95' : 'hover:ring-2 hover:ring-gray-300'}`}
+                  >
+                    <img
+                      src={image.url}
+                      alt={image.alt}
+                      className="w-full h-full object-cover rounded-lg border border-gray-200"
+                      loading="lazy"
+                      style={{
+                        imageRendering: '-webkit-optimize-contrast',
+                      }}
+                    />
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
                         <CheckCircle2 className="w-6 h-6 text-white" />
                       </div>
                     )}
                   </div>
-                </div>
-              ))}
-            </Masonry>
-
-            {/* Selection Bar */}
-            {selectedImages.size > 0 && (
-              <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-xl p-6 animate-slide-up">
-                <div className="max-w-7xl mx-auto flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full">
-                      <span className="font-medium">{selectedImages.size}</span>
-                      <span className="ml-1">image{selectedImages.size !== 1 ? 's' : ''} selected</span>
-                    </div>
-                  </div>
-                  <button className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all transform hover:scale-105 active:scale-95 shadow-md flex items-center gap-2">
-                    <ImageIcon className="w-5 h-5" />
-                    Continue to Print Options
-                  </button>
-                </div>
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Loading State */}
+        {selectedIndices.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-3xl font-bold mb-8">Arrange Your Layout</h2>
+            <PhotoLayoutGrid
+              scrapedImages={scrapedImages}
+              selectedIndices={selectedIndices}
+              onSelectionChange={setSelectedIndices}
+              gap={12} // Default gap
+              roundedness={0} // Default roundedness
+            />
+          </div>
+        )}
+
         {loading && (
-          <div className="flex flex-col items-center justify-center py-12 animate-fade-in">
+          <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
             <p className="text-gray-600">Loading your Pinterest board...</p>
           </div>
@@ -204,6 +170,4 @@ const Home = () => {
       </main>
     </div>
   );
-};
-
-export default Home;
+}
