@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import sharp from 'sharp';
+import { PrintSize } from '@/app/types/order';
 
 interface PrintImage {
   url: string;
@@ -11,12 +12,6 @@ interface PrintImage {
     h: number;
   };
   rotation: number;
-}
-
-interface PrintSize {
-  width: number;
-  height: number;
-  price: number;
 }
 
 interface GenerateRequest {
@@ -58,13 +53,13 @@ export async function POST(req: Request) {
 
       // Calculate grid dimensions
       const imageCount = images.length;
-      let cols;
+      let cols: number;
       switch (imageCount) {
         case 1: cols = 1; break;
         case 2: cols = 2; break;
         case 3: cols = 3; break;
         case 4: cols = 2; break;
-        default: cols = 3;
+        default: cols = Math.ceil(Math.sqrt(imageCount));
       }
       const rows = Math.ceil(imageCount / cols);
       
