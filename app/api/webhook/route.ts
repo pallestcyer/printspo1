@@ -3,7 +3,7 @@ import { kv } from '@vercel/kv';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/api-clients';
-import { sendOrderConfirmation } from '@/lib/email';
+import { sendOrderConfirmation, sendAdminNotification } from '@/lib/email';
 import { createPrintJob } from '@/lib/print-service';
 import { ORDER_STATUS, type Order } from '@/app/types/order';
 
@@ -35,6 +35,8 @@ export async function POST(req: Request) {
         }
 
         const customerEmail = session.customer_details?.email || undefined;
+        const shippingAddress = session.shipping_details?.address;
+        const customerName = session.shipping_details?.name;
 
         await createPrintJob({
           orderId,
@@ -47,13 +49,34 @@ export async function POST(req: Request) {
           ...order,
           status: ORDER_STATUS.PROCESSING,
           paymentId: session.payment_intent ? session.payment_intent.toString() : undefined,
-          email: customerEmail
+          email: customerEmail,
+          shippingAddress: shippingAddress ? {
+            name: customerName,
+            line1: shippingAddress.line1,
+            line2: shippingAddress.line2,
+            city: shippingAddress.city,
+            state: shippingAddress.state,
+            postal_code: shippingAddress.postal_code,
+            country: shippingAddress.country,
+          } : undefined
         };
 
         await kv.set(`order:${orderId}`, updatedOrder);
 
         if (customerEmail) {
+          // Send customer confirmation
           await sendOrderConfirmation(updatedOrder);
+          // Send admin notification with order details and PDF
+          await sendAdminNotification(updatedOrder);
+          // Send high-res PDF to admin
+          await fetch('/api/prints/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              url: order.printFile,
+              printSize: order.printSize 
+            })
+          });
         }
       }
     }

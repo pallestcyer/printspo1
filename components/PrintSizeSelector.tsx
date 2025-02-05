@@ -1,4 +1,5 @@
-import { type PrintSize } from '@/app/types/order';
+import { PRINT_SIZES } from '@/lib/constants';
+import type { PrintSize } from '@/app/types/order';
 
 interface PrintSizeSelectorProps {
   selectedSize: PrintSize | null;
@@ -6,33 +7,26 @@ interface PrintSizeSelectorProps {
 }
 
 export function PrintSizeSelector({ selectedSize, onSizeChange }: PrintSizeSelectorProps) {
-  const printSizes: PrintSize[] = [
-    { width: 8, height: 10, price: 19.99 },
-    { width: 11, height: 14, price: 29.99 },
-    { width: 16, height: 20, price: 39.99 },
-    { width: 20, height: 24, price: 49.99 },
-  ];
-
   return (
-    <div className="w-full">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+    <div className="w-full space-y-2">
+      <label className="block text-sm font-medium text-gray-700">
         Select Print Size
       </label>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {printSizes.map((size) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        {PRINT_SIZES.map((size) => (
           <button
             key={`${size.width}x${size.height}`}
             onClick={() => onSizeChange(size)}
             className={`
-              p-3 border rounded-lg text-sm
+              p-3 rounded-lg border text-left
               ${selectedSize?.width === size.width && selectedSize?.height === size.height
-                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
               }
             `}
           >
             <div className="font-medium">{size.width}" × {size.height}"</div>
-            <div className="text-gray-500">${size.price}</div>
+            <div className="text-sm text-gray-500">${size.price.toFixed(2)}</div>
           </button>
         ))}
       </div>

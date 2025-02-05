@@ -55,4 +55,50 @@ export async function sendOrderConfirmation(order: Order) {
     console.error('Failed to send order confirmation:', error);
     return false;
   }
+}
+
+export async function sendAdminNotification(order: Order) {
+  try {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <body style="font-family: sans-serif; line-height: 1.5; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h1 style="color: #2563eb;">New Order Received!</h1>
+            <p>Order ID: ${order.id}</p>
+            <p>Customer Email: ${order.email || 'Not provided'}</p>
+            
+            <div style="margin-top: 24px;">
+              <h2>Print Details:</h2>
+              <p>Size: ${order.printSize.width}" × ${order.printSize.height}"</p>
+              <p>Price: $${order.printSize.price}</p>
+            </div>
+            
+            <div style="margin-top: 24px;">
+              <a href="${process.env.NEXT_PUBLIC_BASE_URL}/admin/orders/${order.id}" 
+                 style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
+                View Order Details
+              </a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    const result = await resend.sendEmail({
+      from: 'Printspo <orders@printspo.ca>',
+      to: process.env.ADMIN_EMAIL!,
+      subject: `New Order #${order.id}`,
+      html
+    });
+
+    if ('error' in result) {
+      throw new Error(result.error.message);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to send admin notification:', error);
+    return false;
+  }
 } 

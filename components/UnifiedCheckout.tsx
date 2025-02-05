@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { PrintBoardPreview } from './PrintBoardPreview';
-import { Loader2, CheckCircle2, Download } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import type { PrintSize } from '@/app/types/order';
 
 interface UnifiedCheckoutProps {
   layout: {
-    images: {
+    images: Array<{
       url: string;
-      alt?: string;
       position: { x: number; y: number; w: number; h: number };
       rotation: number;
-    }[];
+    }>;
   };
-  printSize: PrintSize;
+  printSize: {
+    width: number;
+    height: number;
+    price: number;
+  };
   spacing: number;
   containMode: boolean;
   onSuccess: (orderId: string) => void;
-  onError: (error: string) => void;
+  onError: (message: string) => void;
 }
 
 export function UnifiedCheckout({ 
@@ -35,6 +38,7 @@ export function UnifiedCheckout({
   const generatePrintFile = async (isPreview = false) => {
     try {
       setLoading(true);
+      
       const response = await fetch('/api/prints/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,16 +51,23 @@ export function UnifiedCheckout({
         })
       });
 
-      if (!response.ok) throw new Error('Failed to generate print file');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate print file');
+      }
+      
       const data = await response.json();
+      console.log('Generate response:', data);
       
       if (isPreview) {
-        setPreviewUrl(data.preview);
+        setPreviewUrl(data.images[0].previewUrl);
+        window.open(data.images[0].previewUrl, '_blank');
       } else {
         setPrintFile(data.images[0].printUrl);
       }
       return data;
     } catch (error) {
+      console.error('Generate print file error:', error);
       onError('Failed to generate print file');
       return null;
     } finally {
@@ -72,6 +83,9 @@ export function UnifiedCheckout({
       const printData = await generatePrintFile(false);
       if (!printData) return;
 
+      // Add a small delay to ensure the PDF opens
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,7 +93,8 @@ export function UnifiedCheckout({
           layout,
           printSize,
           spacing,
-          printFile: printData.images[0].printUrl
+          printFile: printData.images[0].printUrl,
+          previewUrl: printData.images[0].previewUrl
         })
       });
 
@@ -111,10 +126,14 @@ export function UnifiedCheckout({
       <div className="flex gap-4">
         <button
           onClick={() => generatePrintFile(true)}
-          className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-lg disabled:opacity-50 transition-all flex items-center gap-2"
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
         >
-          <Download className="w-5 h-5" />
-          Preview Print
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>Preview Print</>
+          )}
         </button>
 
         <button
@@ -137,20 +156,6 @@ export function UnifiedCheckout({
           </div>
         </button>
       </div>
-
-      {previewUrl && (
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <p className="text-sm text-gray-600 mb-2">Preview generated! Click to download:</p>
-          <a 
-            href={previewUrl}
-            download
-            className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Download Preview
-          </a>
-        </div>
-      )}
     </div>
   );
 } 
