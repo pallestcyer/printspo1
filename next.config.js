@@ -1,27 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    experimental: {
-      // Only add experimental features if you specifically need them
-    },
-    // If you need to configure API routes or redirects
-    async rewrites() {
-      return [
-        {
-          source: '/api/:path*',
-          destination: 'http://localhost:3000/api/:path*',
-        },
-      ];
-    },
     images: {
-      domains: ['i.pinimg.com'], // Add Pinterest's image domain
-      remotePatterns: [
-        {
-          protocol: 'https',
-          hostname: '*.pinimg.com',
-        },
-      ],
+      domains: ['res.cloudinary.com'],
     },
-  }
-  
-  module.exports = nextConfig
+    experimental: {
+      appDir: true,
+    },
+    env: {
+      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+    }
+}
+
+module.exports = nextConfig

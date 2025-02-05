@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { CheckCircle2, Circle } from 'lucide-react';
 import { Step, StepStatus } from '@/app/types/step';
 
 interface StepIndicatorProps {
@@ -6,37 +6,43 @@ interface StepIndicatorProps {
   currentStep: number;
 }
 
-export function StepIndicator({ 
+export function StepIndicator({
   steps = [
-    { title: 'Upload', description: 'Upload your images' },
-    { title: 'Layout', description: 'Arrange your layout' },
-    { title: 'Review', description: 'Review and checkout' }
+    { 
+      title: 'Upload', 
+      description: 'Upload your images',
+      status: 'complete' as StepStatus
+    },
+    { 
+      title: 'Layout', 
+      description: 'Arrange your layout',
+      status: 'current' as StepStatus
+    },
+    { 
+      title: 'Review', 
+      description: 'Review and checkout',
+      status: 'upcoming' as StepStatus
+    }
   ],
-  currentStep 
+  currentStep
 }: StepIndicatorProps) {
   return (
-    <div className="w-full py-4">
-      <nav aria-label="Progress">
-        <ol className="flex items-center justify-between">
-          {steps.map((step, index) => (
-            <li key={step.title} className="flex-1">
-              <div className="flex flex-col items-center">
-                <div className={`
-                  w-8 h-8 rounded-full flex items-center justify-center
-                  ${index < currentStep ? 'bg-blue-600 text-white' : 
-                    index === currentStep ? 'border-2 border-blue-600 text-blue-600' : 
-                    'border-2 border-gray-300 text-gray-300'}
-                `}>
-                  {index + 1}
-                </div>
-                <div className="mt-2 text-sm font-medium">
-                  {step.title}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </nav>
+    <div className="flex justify-between">
+      {steps.map((step, index) => (
+        <div key={step.title} className="flex flex-col items-center">
+          <div className="flex items-center">
+            {step.status === 'complete' ? (
+              <CheckCircle2 className="w-6 h-6 text-green-500" />
+            ) : (
+              <Circle className={`w-6 h-6 ${step.status === 'current' ? 'text-blue-500' : 'text-gray-300'}`} />
+            )}
+          </div>
+          <div className="mt-2 text-center">
+            <div className="text-sm font-medium">{step.title}</div>
+            <div className="text-xs text-gray-500">{step.description}</div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 } 

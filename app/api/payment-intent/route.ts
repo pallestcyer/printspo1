@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/api-clients';
-import { storeOrderData } from '@/lib/storage';
+import Stripe from 'stripe';
+import crypto from 'crypto';
+import { kv } from '@vercel/kv';
+import { ORDER_STATUS, type Order } from '@/app/types/order';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2022-11-15',
+  typescript: true,
+});
 
 export async function POST(req: Request) {
   try {
@@ -14,21 +21,18 @@ export async function POST(req: Request) {
         enabled: true,
       },
       metadata: { orderId }
-    }, {
-      apiVersion: '2023-10-16',
-      stripeAccount: process.env.STRIPE_ACCOUNT_ID
     });
 
     // Store order after successful payment intent creation
-    const order = {
+    const order: Order = {
       id: orderId,
       layout,
       printSize,
-      status: 'pending',
+      status: ORDER_STATUS.PENDING,
       createdAt: new Date().toISOString()
     };
 
-    await storeOrderData(orderId, order);
+    await kv.set(`order:${orderId}`, order);
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,

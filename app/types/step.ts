@@ -1,4 +1,8 @@
-export type StepStatus = 'current' | 'complete' | 'upcoming';
+export enum StepStatus {
+  COMPLETE = 'complete',
+  CURRENT = 'current',
+  UPCOMING = 'upcoming'
+}
 
 export interface Step {
   title: string;

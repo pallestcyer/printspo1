@@ -1,3 +1,14 @@
+// Define status constants
+export const ORDER_STATUS = {
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  COMPLETED: 'completed',
+  PAID: 'paid',
+  SHIPPED: 'shipped'
+} as const;
+
+export type OrderStatus = typeof ORDER_STATUS[keyof typeof ORDER_STATUS];
+
 export interface PrintOrder {
   id: string;
   layout: {
@@ -15,7 +26,7 @@ export interface PrintOrder {
   };
   spacing: number;
   printFile?: Buffer;
-  status: 'pending' | 'paid' | 'processing' | 'shipped';
+  status: OrderStatus;
   createdAt: string;
   paymentId?: string;
   customerEmail?: string;
@@ -23,12 +34,28 @@ export interface PrintOrder {
   printJobCreatedAt?: string;
 }
 
-export type PrintSize = {
+export interface Order {
+  id: string;
+  layout: Layout;
+  printSize: PrintSize;
+  status: OrderStatus;
+  createdAt: string;
+  printFile?: string;
+  paymentId?: string;
+  email?: string;
+  customerEmail?: string;
+  spacing?: number;
+  trackingNumber?: string;
+  printJobCreatedAt?: string;
+}
+
+export interface PrintSize {
   width: number;
   height: number;
   price: number;
-  label: string;
-};
+  name?: string;
+  label?: string;
+}
 
 export const PRINT_SIZES: PrintSize[] = [
   {
@@ -49,4 +76,20 @@ export const PRINT_SIZES: PrintSize[] = [
     price: 6,
     label: '12" × 18"'
   }
-]; 
+];
+
+export interface Layout {
+  images: Array<{
+    url: string;
+    position: { x: number; y: number; w: number; h: number };
+    rotation: number;
+    alt?: string;
+  }>;
+}
+
+export interface PrintJob {
+  orderId: string;
+  printFile: string;
+  printSize: PrintSize;
+  customerEmail?: string;
+} 

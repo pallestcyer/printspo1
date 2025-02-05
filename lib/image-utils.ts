@@ -1,3 +1,5 @@
+import sharp from 'sharp';
+
 export interface ImageDimensions {
   width: number;
   height: number;

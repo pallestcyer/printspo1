@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { stripe } from '@/lib/api-clients';
 import { sendOrderConfirmation } from '@/lib/email';
 import { createPrintJob } from '@/lib/print-service';
+import { ORDER_STATUS, type Order } from '@/app/types/order';
 
 // Configure route options
 export const runtime = 'nodejs';
@@ -26,35 +27,33 @@ export async function POST(req: Request) {
       const orderId = session.metadata?.orderId;
 
       if (orderId) {
-        // Get order details
-        const order = await kv.get(`order:${orderId}`);
+        const order = await kv.get(`order:${orderId}`) as Order | null;
         if (!order) throw new Error('Order not found');
 
-        // Create print job
+        if (!order.printFile) {
+          throw new Error('Print file not found for order');
+        }
+
+        const customerEmail = session.customer_details?.email || undefined;
+
         await createPrintJob({
           orderId,
           printFile: order.printFile,
           printSize: order.printSize,
-          customerEmail: session.customer_details?.email
+          customerEmail
         });
 
-        // Update order status
         const updatedOrder = {
           ...order,
-          status: 'processing',
-          paymentId: session.payment_intent,
-          customerEmail: session.customer_details?.email,
+          status: ORDER_STATUS.PROCESSING,
+          paymentId: session.payment_intent ? session.payment_intent.toString() : undefined,
+          email: customerEmail
         };
 
         await kv.set(`order:${orderId}`, updatedOrder);
 
-        // Send confirmation email
-        if (session.customer_details?.email) {
-          await sendOrderConfirmation({
-            orderId,
-            customerEmail: session.customer_details.email,
-            orderDetails: updatedOrder,
-          });
+        if (customerEmail) {
+          await sendOrderConfirmation(updatedOrder);
         }
       }
     }

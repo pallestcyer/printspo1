@@ -1,25 +1,27 @@
 import React from 'react';
-import type { ScrapedImage } from '@/app/types/index';
+import type { ScrapedImage } from '@/app/types';
 
 interface ImageReplaceModalProps {
-  isOpen: boolean;
+  scrapedImages: Array<{
+    url: string;
+    alt?: string;
+    thumbnailUrl?: string;
+  }>;
+  onSelect: (newImageIndex: number) => void;
   onClose: () => void;
-  onImageSelect: (imageUrl: string) => void;
-  currentImageUrl?: string;
-  availableImages: ScrapedImage[];
+  selectedIndices: number[];
 }
 
-export const ImageReplaceModal = ({
-  isOpen,
+export function ImageReplaceModal({
+  scrapedImages,
+  onSelect,
   onClose,
-  onImageSelect,
-  currentImageUrl = '',
-  availableImages = []
-}: ImageReplaceModalProps) => {
-  if (!isOpen) return null;
+  selectedIndices
+}: ImageReplaceModalProps) {
+  if (!scrapedImages.length) return null;
 
-  // Filter out the current image from available options
-  const otherImages = availableImages.filter(img => img.url !== currentImageUrl);
+  // Filter out the current images from available options
+  const otherImages = scrapedImages.filter((img, index) => !selectedIndices.includes(index));
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -40,7 +42,7 @@ export const ImageReplaceModal = ({
               <button
                 key={`${image.url}-${index}`}
                 onClick={() => {
-                  onImageSelect(image.url);
+                  onSelect(index);
                   onClose();
                 }}
                 className="relative aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-500 transition-all"
@@ -70,4 +72,4 @@ export const ImageReplaceModal = ({
       </div>
     </div>
   );
-}; 
+} 

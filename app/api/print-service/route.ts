@@ -1,37 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-
-interface PrintJob {
-  orderId: string;
-  images: {
-    url: string;
-    position: { x: number; y: number; w: number; h: number };
-    rotation: number;
-  }[];
-  printSize: {
-    width: number;
-    height: number;
-    name: string;
-  };
-}
-
-interface Order {
-  id: string;
-  layout: {
-    images: {
-      url: string;
-      position: { x: number; y: number; w: number; h: number };
-      rotation: number;
-    }[];
-  };
-  printSize: {
-    width: number;
-    height: number;
-    name: string;
-  };
-  status: string;
-  createdAt: string;
-}
+import { ORDER_STATUS, type PrintJob, type Order } from '@/app/types/order';
 
 export async function POST(request: Request) {
   try {
@@ -45,8 +14,9 @@ export async function POST(request: Request) {
     // Create print job
     const printJob: PrintJob = {
       orderId,
-      images: order.layout.images,
-      printSize: order.printSize
+      printFile: order.printFile || '',
+      printSize: order.printSize,
+      customerEmail: order.customerEmail
     };
 
     // Here you would integrate with your print service
@@ -54,7 +24,7 @@ export async function POST(request: Request) {
     
     // Update order status
     await kv.hset(`order:${orderId}`, {
-      status: 'processing',
+      status: ORDER_STATUS.PROCESSING,
       printJobCreatedAt: new Date().toISOString()
     });
 

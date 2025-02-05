@@ -104,7 +104,7 @@ export default function PhotoLayoutGrid({
 
       {replaceModalOpen && (
         <ImageReplaceModal
-          images={scrapedImages}
+          scrapedImages={scrapedImages}
           onSelect={handleImageSelect}
           onClose={() => setReplaceModalOpen(false)}
           selectedIndices={selectedIndices}

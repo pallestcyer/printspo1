@@ -1,14 +1,6 @@
 import { getPrintSizeVariantId } from './stripe-helpers';
-import { PrintSize } from '@/app/types/order';
 import { kv } from '@vercel/kv';
-import type { PrintJob, Order } from '@/app/types/order';
-
-interface PrintJob {
-  orderId: string;
-  printFileUrl: string;
-  printSize: PrintSize;
-  shippingAddress: any;
-}
+import type { PrintJob, Order, PrintSize } from '@/app/types/order';
 
 export async function createPrintJob({
   orderId,
@@ -18,18 +10,19 @@ export async function createPrintJob({
 }: {
   orderId: string;
   printFile: string;
-  printSize: { width: number; height: number };
+  printSize: PrintSize;
   customerEmail?: string;
-}) {
+}): Promise<PrintJob> {
+  if (!printFile) {
+    throw new Error('Print file is required to create a print job');
+  }
+
   try {
-    // Create print job with your print service provider
-    const printJob = {
+    const printJob: PrintJob = {
       orderId,
       printFile,
       printSize,
-      customerEmail,
-      status: 'queued',
-      createdAt: new Date().toISOString()
+      customerEmail
     };
 
     // Store print job details

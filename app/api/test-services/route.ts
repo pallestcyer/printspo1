@@ -1,59 +1,33 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/api-clients';
-import { resend } from '@/lib/api-clients';
+import Stripe from 'stripe';
 import { kv } from '@vercel/kv';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2022-11-15',
+  typescript: true,
+});
 
 export async function GET() {
   const results = {
     stripe: false,
-    resend: false,
-    kv: false,
+    kv: false
   };
-
+  
   try {
-    // Add environment variable check
-    console.log('KV Environment Variables:');
-    console.log('KV_URL:', process.env.KV_URL ? 'Set' : 'Not Set');
-    console.log('KV_REST_API_URL:', process.env.KV_REST_API_URL ? 'Set' : 'Not Set');
-    console.log('KV_REST_API_TOKEN:', process.env.KV_REST_API_TOKEN ? 'Set' : 'Not Set');
+    // Test Stripe
+    const stripeTest = await stripe.paymentIntents.list({ limit: 1 });
+    results.stripe = !!stripeTest.data;
 
-    console.log('Testing Stripe connection...');
-    try {
-      // Simpler Stripe test
-      const balance = await stripe.balance.retrieve();
-      results.stripe = true;
-      console.log('✅ Stripe connection successful');
-    } catch (e) {
-      console.error('❌ Stripe error:', e);
-    }
+    // Test KV
+    await kv.set('test-key', 'test-value');
+    const kvTest = await kv.get('test-key');
+    results.kv = kvTest === 'test-value';
+    await kv.del('test-key');
 
-    console.log('Testing Resend connection...');
-    try {
-      // Simpler Resend test
-      const domains = await resend.domains.list();
-      results.resend = true;
-      console.log('✅ Resend connection successful');
-    } catch (e) {
-      console.error('❌ Resend error:', e);
-    }
-
-    console.log('Testing KV connection...');
-    try {
-      await kv.set('test', 'value');
-      results.kv = true;
-      console.log('✅ KV connection successful');
-    } catch (e) {
-      console.error('❌ KV error:', e);
-    }
-
-    return NextResponse.json({
-      message: 'Service check complete',
-      results
-    });
+    return NextResponse.json(results);
   } catch (error) {
-    console.error('Service check error:', error);
+    console.error('Service test error:', error);
     return NextResponse.json({
-      message: 'Service check failed',
       results,
       error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
