@@ -16,8 +16,8 @@ interface LayoutData {
 
 interface CheckoutButtonProps {
   layoutData: LayoutData;
-  printSize: PrintSize;
-  disabled: boolean;
+  printSize: PrintSize | null;
+  disabled?: boolean;
 }
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -61,7 +61,7 @@ export const CheckoutButton: React.FC<CheckoutButtonProps> = ({
           Processing...
         </span>
       ) : (
-        `Checkout - $${printSize.price}`
+        `Checkout - $${printSize?.price}`
       )}
     </button>
   );

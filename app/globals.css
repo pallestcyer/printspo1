@@ -245,9 +245,23 @@ body {
 }
 
 .scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
+
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+.image-scroll-container {
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  padding: 1rem;
+  margin: -1rem;  /* Offset padding to maintain alignment */
+}
+
+.image-scroll-item {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }

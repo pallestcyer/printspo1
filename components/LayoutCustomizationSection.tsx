@@ -4,6 +4,7 @@ import { PrintSizeSelector } from '@/components/PrintSizeSelector';
 import { GapControl } from '@/components/GapControl';
 import type { PrintSize } from '@/app/types/order';
 import type { ScrapedImage } from '@/app/types/index';
+import { PRINT_SIZES } from '@/lib/constants';
 
 // Maximum number of images supported by any layout
 const MAX_IMAGES = 4; // Based on the maximum from available layouts
@@ -51,6 +52,7 @@ export const LayoutCustomizationSection = ({
             </div>
             <div className="flex items-center gap-4">
               <PrintSizeSelector
+                sizes={PRINT_SIZES}
                 selectedSize={selectedSize}
                 onSizeChange={onSizeChange}
               />

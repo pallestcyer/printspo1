@@ -192,175 +192,64 @@ export default function Home() {
   };
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-6xl min-h-screen flex flex-col items-center justify-center">
-      <div className="text-center space-y-8 mb-12 max-w-3xl">
-        <div className="w-20 h-20 mx-auto">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-full h-full text-blue-500"
-          >
-            <path
-              d="M21 8V16C21 18.7614 18.7614 21 16 21H8C5.23858 21 3 18.7614 3 16V8C3 5.23858 5.23858 3 8 3H16C18.7614 3 21 5.23858 21 8Z"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-            <path
-              d="M7 14.5L9.5 17L17 9.5"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+    <main className="min-h-screen bg-gray-50">
+      {/* URL Input Section */}
+      <section className="w-full max-w-3xl mx-auto p-4">
+        <div className="bg-white rounded-lg shadow p-4">
+          <URLInput 
+            url={url}
+            setUrl={setUrl}
+            onSubmit={handleSubmit} 
+            loading={loading} 
+          />
         </div>
-        
-        <div className="space-y-6">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-            from
-          <span className="text-blue-600"> Pins </span>
-            to
-            <span className="text-blue-600"> Prints</span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Whether it's your mood board, recipe collection, or creative inspiration – 
-            bring your pins to life with beautiful, high-quality prints.
-          </p>
-        </div>
+      </section>
 
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 shadow-sm">
-          <p className="text-lg text-blue-800 font-medium">
-            ✨ Simply paste your Pinterest board URL and select your favorites.
-          </p>
-        </div>
-      </div>
-
-      <div className="w-full max-w-xl">
-        <URLInput 
-          url={url}
-          setUrl={setUrl}
-          onSubmit={handleSubmit}
-          loading={loading}
-        />
-      </div>
-
+      {/* Image Selection Section */}
       {scrapedImages.length > 0 && (
-        <>
-          <div className="relative group">
-            <button 
-              className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full shadow-lg z-20 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => {
-                if (scrollRef.current) {
-                  scrollRef.current.scrollLeft -= 200;
-                }
-              }}
-            >
-              <ChevronLeft className="h-5 w-5 text-gray-700" />
-            </button>
-
-            <div 
-              ref={scrollRef}
-              className="overflow-x-auto cursor-grab active:cursor-grabbing no-scrollbar"
-              onMouseDown={handleDragStart}
-              onMouseMove={handleDrag}
-              onMouseUp={handleDragEnd}
-              onMouseLeave={handleDragEnd}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-            >
-              <div className="flex gap-3 px-4 py-4 min-w-max">
-                {scrapedImages.map((image, index) => (
-                  <button
-                    key={`${image.url}-${index}`}
-                    className={`
-                      relative cursor-pointer rounded-lg overflow-hidden select-none
-                      ${selectedIndices.includes(index) ? 'ring-2 ring-blue-500' : 'ring-1 ring-gray-200'}
-                    `}
-                    onClick={() => toggleImageSelection(index)}
-                  >
-                    <div 
-                      className="w-32 relative"
-                      style={{ 
-                        height: 'fit-content',
-                        lineHeight: 0 // Remove any extra space
-                      }}
-                    >
-                      <img
-                        src={image.url}
-                        alt={image.alt || ''}
-                        className="w-full h-auto object-contain"
-                        loading="lazy"
-                        draggable="false"
-                      />
-                    </div>
-                    {selectedIndices.includes(index) && (
-                      <div className="absolute inset-0 bg-blue-500 bg-opacity-10 flex items-center justify-center">
-                        <div className="bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">
-                          {selectedIndices.indexOf(index) + 1}
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button 
-              className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full shadow-lg z-20 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => {
-                if (scrollRef.current) {
-                  scrollRef.current.scrollLeft += 200;
-                }
-              }}
-            >
-              <ChevronRight className="h-5 w-5 text-gray-700" />
-            </button>
-          </div>
-
-          {selectedIndices.length > 0 && (
-            <div className="space-y-6">
-              <div className="flex flex-col items-center gap-4 bg-gray-50 p-4 rounded-lg">
-                <PrintSizeSelector
-                  selectedSize={selectedSize}
-                  onSizeChange={setSelectedSize}
-                />
-                <div className="flex items-center gap-6">
-                  <GapControl
-                    value={spacing}
-                    onChange={setSpacing}
-                    label="Image spacing"
-                  />
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={containMode}
-                      onChange={(e) => setContainMode(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">Show full images</span>
-                  </label>
-                </div>
-              </div>
-
-              {selectedSize && (
-                <UnifiedCheckout
-                  layout={calculateLayout()!}
-                  printSize={selectedSize}
-                  spacing={spacing}
-                  containMode={containMode}
-                  onSuccess={(orderId) => router.push(`/orders/${orderId}/success`)}
-                  onError={setError}
-                />
-              )}
-            </div>
-          )}
-        </>
+        <section className="w-full py-8">
+          <ImageSelectionSection
+            images={scrapedImages}
+            selectedIndices={selectedIndices}
+            onSelect={toggleImageSelection}
+          />
+        </section>
       )}
 
+      {/* Print Options Section */}
+      {selectedIndices.length > 0 && (
+        <section className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4 z-50">
+          <div className="w-full max-w-3xl mx-auto flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex-1 w-full">
+              <PrintSizeSelector
+                sizes={PRINT_SIZES}
+                selectedSize={selectedSize}
+                onSizeChange={setSelectedSize}
+              />
+            </div>
+            <div className="w-full sm:w-auto">
+              <CheckoutButton
+                layoutData={{
+                  name: 'Custom Layout',
+                  template: [[1]],
+                  images: selectedIndices.map(index => ({
+                    url: scrapedImages[index].url,
+                    alt: scrapedImages[index].alt,
+                    position: { x: 0, y: 0, w: 1, h: 1 },
+                    rotation: 0
+                  }))
+                }}
+                printSize={selectedSize}
+                disabled={selectedIndices.length === 0 || !selectedSize}
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mt-4">
+        <div className="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
