@@ -81,11 +81,11 @@ export function UnifiedCheckout({
       
       // Generate high-res print file first
       const printData = await generatePrintFile(false);
-      if (!printData) return;
+      if (!printData) {
+        throw new Error('Failed to generate print file');
+      }
 
-      // Add a small delay to ensure the PDF opens
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
+      // Create order and get Stripe session
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,13 +98,24 @@ export function UnifiedCheckout({
         })
       });
 
-      if (!response.ok) throw new Error('Failed to create order');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create order');
+      }
+
       const { sessionId, orderId } = await response.json();
       
       const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-      if (!stripe) throw new Error('Failed to load payment processor');
+      if (!stripe) {
+        throw new Error('Failed to load payment processor');
+      }
 
-      await stripe.redirectToCheckout({ sessionId });
+      // Redirect to Stripe checkout
+      const { error } = await stripe.redirectToCheckout({ sessionId });
+      if (error) {
+        throw error;
+      }
+
       onSuccess(orderId);
     } catch (error) {
       console.error('Checkout error:', error);

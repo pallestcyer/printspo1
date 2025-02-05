@@ -25,6 +25,17 @@ export async function POST(req: Request) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.orderId;
+      const shippingAddress = session.shipping_details?.address;
+
+      // Validate Toronto address
+      if (!shippingAddress?.city?.toLowerCase().includes('toronto') || 
+          !shippingAddress?.postal_code?.toLowerCase().startsWith('m')) {
+        console.error('Non-Toronto address detected:', shippingAddress);
+        return NextResponse.json(
+          { error: 'Sorry, we currently only deliver to Toronto addresses' },
+          { status: 400 }
+        );
+      }
 
       if (orderId) {
         const order = await kv.get(`order:${orderId}`) as Order | null;
@@ -35,7 +46,6 @@ export async function POST(req: Request) {
         }
 
         const customerEmail = session.customer_details?.email || undefined;
-        const shippingAddress = session.shipping_details?.address;
         const customerName = session.shipping_details?.name;
 
         await createPrintJob({
