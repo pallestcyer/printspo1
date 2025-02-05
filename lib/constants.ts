@@ -25,4 +25,9 @@ export const PRINT_SIZES = {
   }
 } as const;
 
-export type PrintSizeKey = keyof typeof PRINT_SIZES; 
+export type PrintSizeKey = keyof typeof PRINT_SIZES;
+
+export const PATHS = {
+  types: '@/app/types/index',
+  orders: '@/app/types/order',
+} as const; 

@@ -3,18 +3,21 @@ import PhotoLayoutGrid from '@/components/PhotoLayoutGrid';
 import { PrintSizeSelector } from '@/components/PrintSizeSelector';
 import { GapControl } from '@/components/GapControl';
 import type { PrintSize } from '@/app/types/order';
-import type { ScrapedImage } from '@/app/types';
+import type { ScrapedImage } from '@/app/types/index';
 
 // Maximum number of images supported by any layout
 const MAX_IMAGES = 4; // Based on the maximum from available layouts
 
 interface LayoutCustomizationSectionProps {
-  selectedImages: Image[];
+  selectedImages: ScrapedImage[];
   selectedSize: PrintSize;
   spacing: number;
-  onSpacingChange: (value: number) => void;
+  onSpacingChange: (spacing: number) => void;
   onSizeChange: (size: PrintSize) => void;
-  onLayoutComplete?: (layout: any) => void;
+  onLayoutComplete: () => void;
+  gapSpacing: number;
+  onGapChange: (spacing: number) => void;
+  onCheckout: () => Promise<void>;
 }
 
 export const LayoutCustomizationSection = ({
@@ -24,6 +27,9 @@ export const LayoutCustomizationSection = ({
   onSpacingChange,
   onSizeChange,
   onLayoutComplete,
+  gapSpacing,
+  onGapChange,
+  onCheckout
 }: LayoutCustomizationSectionProps) => {
   return (
     <section className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -51,6 +57,9 @@ export const LayoutCustomizationSection = ({
               spacing={spacing}
               setSpacing={onSpacingChange}
               onLayoutComplete={onLayoutComplete}
+              onCheckout={onCheckout}
+              gapSpacing={gapSpacing}
+              onGapChange={onGapChange}
             />
           </div>
         </div>

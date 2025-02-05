@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import Stripe from 'stripe';
 import { generatePrintFile } from '@/lib/print-generator';
-import { uploadToS3 } from '@/lib/storage';
+import { storeOrderData } from '@/lib/storage';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -18,22 +18,19 @@ export async function POST(req: Request) {
       spacing
     });
 
-    // Upload to S3
-    const fileUrl = await uploadToS3(printFile, `orders/${orderId}/print.jpg`);
-
     // Create order record
     const order = {
       id: orderId,
       layout,
       printSize,
       spacing,
-      printFileUrl: fileUrl,
+      printFile, // Store the file data directly in KV
       status: 'pending',
       createdAt: new Date().toISOString()
     };
 
-    // Store in KV
-    await kv.set(`order:${orderId}`, order);
+    // Store in KV with 30-day expiration
+    await storeOrderData(orderId, order);
 
     // Create Stripe session
     const session = await stripe.checkout.sessions.create({

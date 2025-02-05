@@ -1,12 +1,18 @@
 import { kv } from '@vercel/kv';
 import { CheckCircle2, Printer, Truck } from 'lucide-react';
+import { PrintOrder } from '@/app/types/order';
+import { notFound } from 'next/navigation';
 
 export default async function OrderSuccessPage({ 
   params: { orderId } 
 }: { 
   params: { orderId: string } 
 }) {
-  const order = await kv.get(`order:${orderId}`);
+  const order = await kv.get(`order:${orderId}`) as PrintOrder | null;
+  
+  if (!order) {
+    notFound();
+  }
   
   return (
     <div className="max-w-2xl mx-auto p-8">

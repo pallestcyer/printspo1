@@ -15,10 +15,28 @@ interface PrintJob {
   };
 }
 
+interface Order {
+  id: string;
+  layout: {
+    images: {
+      url: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }[];
+  };
+  printSize: {
+    width: number;
+    height: number;
+    name: string;
+  };
+  status: string;
+  createdAt: string;
+}
+
 export async function POST(request: Request) {
   try {
     const { orderId } = await request.json();
-    const order = await kv.get(`order:${orderId}`);
+    const order = await kv.get(`order:${orderId}`) as Order | null;
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });

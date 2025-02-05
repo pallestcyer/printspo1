@@ -3,10 +3,10 @@ import { kv } from '@vercel/kv';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { orderId: string } }
 ) {
   try {
-    const order = await kv.get(`order:${params.id}`);
+    const order = await kv.get(`order:${params.orderId}`);
     
     if (!order) {
       return NextResponse.json(

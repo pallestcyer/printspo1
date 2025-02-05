@@ -1,10 +1,10 @@
+import { getPrintSizeVariantId } from './stripe-helpers';
+import { PrintSize } from '@/app/types/order';
+
 interface PrintJob {
   orderId: string;
   printFileUrl: string;
-  printSize: {
-    width: number;
-    height: number;
-  };
+  printSize: PrintSize;
   shippingAddress: any;
 }
 

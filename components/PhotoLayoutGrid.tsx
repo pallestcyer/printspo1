@@ -1,18 +1,21 @@
 import React, { useState, useRef } from 'react';
 import { Replace } from 'lucide-react';
 import { ImageReplaceModal } from './ImageReplaceModal';
-import type { ScrapedImage } from '@/app/types';
+import type { ScrapedImage } from '@/app/types/index';
 import type { PrintSize } from '@/app/types/order';
 import { loadStripe } from '@stripe/stripe-js';
 
 interface PhotoLayoutGridProps {
   scrapedImages: ScrapedImage[];
   selectedIndices: number[];
-  onSelectionChange: (newIndices: number[]) => void;
+  onSelectionChange: (indices: number[]) => void;
   selectedSize: PrintSize;
-  onCheckout: () => void;
-  gapSpacing?: number;
-  onGapChange?: (value: number) => void;
+  onCheckout: () => Promise<void>;
+  gapSpacing: number;
+  onGapChange: (spacing: number) => void;
+  spacing?: number;
+  setSpacing?: (spacing: number) => void;
+  onLayoutComplete?: () => void;
 }
 
 export default function PhotoLayoutGrid({

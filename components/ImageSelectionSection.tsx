@@ -1,8 +1,9 @@
 import { CheckCircle2 } from 'lucide-react';
 import { theme } from '@/components/ui/theme';
+import type { ScrapedImage } from '@/app/types';
 
 interface ImageSelectionSectionProps {
-  images: Array<{ url: string; alt: string }>;
+  images: ScrapedImage[];
   selectedIndices: number[];
   onSelectionChange: (indices: number[]) => void;
 }

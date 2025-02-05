@@ -1,10 +1,29 @@
-import { put } from '@vercel/blob';
+import { kv } from '@vercel/kv';
 
-export async function uploadToStorage(file: Buffer, key: string): Promise<string> {
-  const { url } = await put(key, file, {
-    access: 'public',
-    contentType: 'image/jpeg'
-  });
+export async function storeOrderData(
+  orderId: string,
+  data: any,
+  expirationInDays = 30
+): Promise<void> {
+  // Store in KV with expiration (30 days default)
+  const expirationInSeconds = expirationInDays * 24 * 60 * 60;
+  await kv.set(`order:${orderId}`, data, { ex: expirationInSeconds });
+}
+
+export async function getOrderData(orderId: string): Promise<any | null> {
+  return await kv.get(`order:${orderId}`);
+}
+
+export async function updateOrderData(
+  orderId: string,
+  updates: Partial<any>
+): Promise<void> {
+  const existingData = await getOrderData(orderId);
+  if (!existingData) throw new Error('Order not found');
   
-  return url;
+  await kv.set(`order:${orderId}`, {
+    ...existingData,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  });
 } 

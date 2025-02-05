@@ -1,9 +1,6 @@
 export interface PrintOrder {
   id: string;
-  userId?: string;
   layout: {
-    name: string;
-    template: number[][];
     images: {
       url: string;
       position: { x: number; y: number; w: number; h: number };
@@ -11,14 +8,19 @@ export interface PrintOrder {
     }[];
   };
   printSize: {
-    name: string;
     width: number;
     height: number;
+    name: string;
     price: number;
   };
+  spacing: number;
+  printFile?: Buffer;
   status: 'pending' | 'paid' | 'processing' | 'shipped';
-  createdAt: number;
-  sessionId?: string;
+  createdAt: string;
+  paymentId?: string;
+  customerEmail?: string;
+  trackingNumber?: string;
+  printJobCreatedAt?: string;
 }
 
 export type PrintSize = PrintOrder['printSize']; 

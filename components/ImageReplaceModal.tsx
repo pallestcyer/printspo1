@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ScrapedImage } from '@/app/types';
+import type { ScrapedImage } from '@/app/types/index';
 
 interface ImageReplaceModalProps {
   isOpen: boolean;

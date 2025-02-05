@@ -4,9 +4,9 @@ import { theme } from '@/components/ui/theme';
 interface URLInputProps {
   url: string;
   setUrl: (url: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent) => Promise<void>;
   loading: boolean;
-  error: string;
+  error?: string;
 }
 
 export const URLInput = ({ url, setUrl, onSubmit, loading, error }: URLInputProps) => {

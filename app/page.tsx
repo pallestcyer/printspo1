@@ -15,6 +15,8 @@ import { URLInput } from '@/components/URLInput';
 import { ImageSelectionSection } from '@/components/ImageSelectionSection';
 import { LayoutCustomizationSection } from '@/components/LayoutCustomizationSection';
 import { loadStripe } from '@stripe/stripe-js';
+import { Step, StepStatus } from '@/app/types/step';
+import { getPrintSizeVariantId } from '@/lib/stripe-helpers';
 
 interface ScrapedImage {
   url: string;
@@ -31,7 +33,7 @@ export default function Home() {
   const [selectedSize, setSelectedSize] = useState<PrintSize>(PRINT_SIZES['8.5x11']);
   const [gapSpacing, setGapSpacing] = useState(16);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -83,16 +85,11 @@ export default function Home() {
     const validIndices = selectedIndices.filter(index => scrapedImages[index]);
     
     return {
-      size: {
-        width: selectedSize.width,
-        height: selectedSize.height,
-        name: selectedSize.name
-      },
-      spacing,
       images: validIndices.map(index => ({
         url: scrapedImages[index].url,
         alt: scrapedImages[index].alt,
-        position: index
+        position: { x: 0, y: 0, w: 1, h: 1 },
+        rotation: 0
       }))
     };
   };
@@ -102,62 +99,45 @@ export default function Home() {
     if (!layout) return null;
 
     return {
-      layout_id: layout.layout,
-      print_size: {
+      layout,
+      printSize: {
         name: selectedSize.name,
         width: selectedSize.width,
         height: selectedSize.height,
         price: selectedSize.price
       },
-      images: layout.images.map(img => ({
-        url: img.url,
-        position: img.position,
-        rotation: img.rotation || 0,
-        quality_settings: {
-          dpi: 300,
-          color_space: 'sRGB',
-          format: 'PNG'
-        }
-      })),
-      spacing: spacing,
-      metadata: {
-        created_at: new Date().toISOString(),
-        customer_email: null, // Will be collected during checkout
-        order_status: 'draft'
-      }
+      spacing
     };
   };
 
   const handleLayoutComplete = () => {
     const layout = calculateLayout();
     if (!layout) return;
-
-    // Prepare layout data for checkout
-    const printLayout = prepareLayoutForPrint();
-    if (!printLayout) return;
-
-    // You can add additional validation or processing here
-    // For now, we'll just log the layout data
-    console.log('Layout complete:', printLayout);
+    console.log('Layout complete:', layout);
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (): Promise<void> => {
     try {
       const layout = {
         images: selectedIndices.map(index => ({
           url: scrapedImages[index].url,
-          alt: scrapedImages[index].alt
-        })),
-        printSize: selectedSize
+          alt: scrapedImages[index].alt,
+          position: { x: 0, y: 0, w: 1, h: 1 },
+          rotation: 0
+        }))
       };
 
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(layout)
+        body: JSON.stringify({
+          layout,
+          printSize: selectedSize,
+          spacing
+        })
       });
 
-      const { sessionId } = await response.json();
+      const { sessionId, orderId } = await response.json();
       
       // Redirect to Stripe checkout
       const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -170,22 +150,22 @@ export default function Home() {
     }
   };
 
-  const steps = [
+  const steps: Step[] = [
     {
       title: 'Import Images',
       description: 'Add Pinterest board URL',
-      status: !url ? 'current' : scrapedImages.length > 0 ? 'complete' : 'upcoming'
+      status: (!url ? 'current' : scrapedImages.length > 0 ? 'complete' : 'upcoming') as StepStatus
     },
     {
       title: 'Select Images',
       description: 'Choose photos for your layout',
-      status: !scrapedImages.length ? 'upcoming' : 
-        selectedIndices.length > 0 ? 'complete' : 'current'
+      status: (!scrapedImages.length ? 'upcoming' : 
+        selectedIndices.length > 0 ? 'complete' : 'current') as StepStatus
     },
     {
       title: 'Customize Layout',
       description: 'Arrange and adjust photos',
-      status: !selectedIndices.length ? 'upcoming' : 'current'
+      status: (!selectedIndices.length ? 'upcoming' : 'current') as StepStatus
     }
   ];
 
@@ -226,6 +206,9 @@ export default function Home() {
             onSpacingChange={setSpacing}
             onSizeChange={setSelectedSize}
             onLayoutComplete={handleLayoutComplete}
+            gapSpacing={gapSpacing}
+            onGapChange={setGapSpacing}
+            onCheckout={handleCheckout}
           />
         )}
 
