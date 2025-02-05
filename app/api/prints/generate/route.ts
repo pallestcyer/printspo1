@@ -119,7 +119,7 @@ export async function POST(req: Request) {
       })))
       .jpeg({ 
         quality: isPreview ? 80 : 90,
-        density: dpi
+        chromaSubsampling: '4:4:4'
       })
       .toBuffer();
 
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
           transformation: [
             { dpr: "2.0" },
             { quality: isPreview ? "auto:good" : "90" },
-            // Force PDF for non-preview
+            { density: dpi },
             ...(!isPreview ? [{ flags: "attachment" }] : [])
           ]
         }
