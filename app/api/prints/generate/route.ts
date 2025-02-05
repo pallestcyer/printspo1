@@ -32,7 +32,7 @@ cloudinary.config({
 export async function POST(req: Request) {
   try {
     console.log('Starting print generation...');
-    const { images, printSize, spacing, containMode = false, isPreview = false } = await req.json();
+    const { images, printSize, spacing, containMode = false, isPreview = false }: GenerateRequest = await req.json();
     
     if (!images?.length) {
       return NextResponse.json({ error: 'No images provided' }, { status: 400 });
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
         background: { r: 255, g: 255, b: 255, alpha: 1 }
       }
     })
-    .composite(await Promise.all(images.map(async (image, index) => {
+    .composite(await Promise.all(images.map(async (image: PrintImage, index: number) => {
       try {
         console.log(`Processing image ${index + 1}:`, image.url);
         const response = await fetch(image.url);
