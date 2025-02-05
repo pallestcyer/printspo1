@@ -19,14 +19,10 @@ import { OptimizedCheckout } from '@/components/OptimizedCheckout';
 import { useRouter } from 'next/navigation';
 import { UnifiedCheckout } from '@/components/UnifiedCheckout';
 import { PrintBoardPreview } from '@/components/PrintBoardPreview';
+import type { ScrapedImage } from '@/app/types/index';
 
 // Maximum number of images supported by any layout
 const MAX_IMAGES = 12;
-
-interface ScrapedImage {
-  url: string;
-  alt: string;
-}
 
 export default function Home() {
   const router = useRouter();
@@ -34,9 +30,9 @@ export default function Home() {
   const [scrapedImages, setScrapedImages] = useState<ScrapedImage[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [spacing, setSpacing] = useState(0.1);
-  const [selectedSize, setSelectedSize] = useState<PrintSize>(PRINT_SIZES[0]);
+  const [selectedSize, setSelectedSize] = useState<PrintSize | null>(null);
   const [gapSpacing, setGapSpacing] = useState(16);
   const [currentStep, setCurrentStep] = useState(1);
   const [containMode, setContainMode] = useState(false);
@@ -47,7 +43,7 @@ export default function Home() {
 
   const handleSubmit = async (submittedUrl: string): Promise<void> => {
     setLoading(true);
-    setError('');
+    setError(null);
     setScrapedImages([]);
 
     try {
@@ -348,17 +344,25 @@ export default function Home() {
                 </div>
               </div>
 
-              <UnifiedCheckout
-                layout={calculateLayout()!}
-                printSize={selectedSize}
-                spacing={spacing}
-                containMode={containMode}
-                onSuccess={(orderId) => router.push(`/orders/${orderId}/success`)}
-                onError={setError}
-              />
+              {selectedSize && (
+                <UnifiedCheckout
+                  layout={calculateLayout()!}
+                  printSize={selectedSize}
+                  spacing={spacing}
+                  containMode={containMode}
+                  onSuccess={(orderId) => router.push(`/orders/${orderId}/success`)}
+                  onError={setError}
+                />
+              )}
             </div>
           )}
         </>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mt-4">
+          {error}
+        </div>
       )}
     </main>
   );

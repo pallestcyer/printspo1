@@ -1,6 +1,10 @@
 const checkBuildRequirements = () => {
   const requiredForBuild = [
     'NEXT_PUBLIC_BASE_URL',
+    'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'RESEND_API_KEY'
   ];
 
   const missing = requiredForBuild.filter(
