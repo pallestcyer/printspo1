@@ -83,32 +83,36 @@ body {
 
 /* Grid container for the print layout */
 .print-layout-container {
-  border: 2px solid #e0e0e0; /* Border around the printable area */
-  padding: 20px; /* Space around the layout */
-  background-color: white;
+  border: none;
+  padding: 0;
+  background-color: transparent;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Container for the images */
 .image-container {
+  aspect-ratio: 16 / 9;
   position: relative;
   overflow: hidden;
-  border-radius: 0px;
-}
-
-/* Image inside the container */
-.image-container img {
-  object-fit: cover;
-  width: 100%;
+  background-color: #f9f9f9;
   height: 100%;
 }
 
-/* Layout Grid for images (responsive) */
-.layout-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr); /* Default 4 columns */
-  gap: 16px;
+.image-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
+.layout-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
 .layout-grid .image-container {
   aspect-ratio: 16 / 9; /* Default aspect ratio */
 }
@@ -170,4 +174,40 @@ body {
 /* Provide spacing adjustments */
 .space-y-8 {
   margin-top: 2rem;
+}
+
+/* Add these styles */
+.layout-preview {
+  background-color: white;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  border: 1px solid rgb(229 231 235);
+  height: fit-content;
+  overflow: hidden;
+}
+
+.order-summary {
+  background-color: white;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  border: 1px solid rgb(229 231 235);
+}
+
+.print-preview-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.print-board {
+  background-color: white;
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .print-board {
+    width: 90vw;
+  }
 }

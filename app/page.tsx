@@ -4,6 +4,17 @@ import { AlertCircle, Loader2, CheckCircle2, Info } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import PhotoLayoutGrid from '@/components/PhotoLayoutGrid';
+import { PrintSizeSelector } from '@/components/PrintSizeSelector';
+import { CheckoutButton } from '@/components/CheckoutButton';
+import { PRINT_SIZES } from '@/lib/constants';
+import { GapControl } from '@/components/GapControl';
+import type { PrintSize } from '@/app/types/order';
+import { theme } from '@/components/ui/theme';
+import { StepIndicator } from '@/components/StepIndicator';
+import { URLInput } from '@/components/URLInput';
+import { ImageSelectionSection } from '@/components/ImageSelectionSection';
+import { LayoutCustomizationSection } from '@/components/LayoutCustomizationSection';
+import { loadStripe } from '@stripe/stripe-js';
 
 interface ScrapedImage {
   url: string;
@@ -16,6 +27,9 @@ export default function Home() {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [spacing, setSpacing] = useState(8);
+  const [selectedSize, setSelectedSize] = useState<PrintSize>(PRINT_SIZES['8.5x11']);
+  const [gapSpacing, setGapSpacing] = useState(16);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -61,113 +75,191 @@ export default function Home() {
     );
   };
 
+  const calculateLayout = () => {
+    if (!selectedIndices.length || !scrapedImages.length) {
+      return null;
+    }
+
+    const validIndices = selectedIndices.filter(index => scrapedImages[index]);
+    
+    return {
+      size: {
+        width: selectedSize.width,
+        height: selectedSize.height,
+        name: selectedSize.name
+      },
+      spacing,
+      images: validIndices.map(index => ({
+        url: scrapedImages[index].url,
+        alt: scrapedImages[index].alt,
+        position: index
+      }))
+    };
+  };
+
+  const prepareLayoutForPrint = () => {
+    const layout = calculateLayout();
+    if (!layout) return null;
+
+    return {
+      layout_id: layout.layout,
+      print_size: {
+        name: selectedSize.name,
+        width: selectedSize.width,
+        height: selectedSize.height,
+        price: selectedSize.price
+      },
+      images: layout.images.map(img => ({
+        url: img.url,
+        position: img.position,
+        rotation: img.rotation || 0,
+        quality_settings: {
+          dpi: 300,
+          color_space: 'sRGB',
+          format: 'PNG'
+        }
+      })),
+      spacing: spacing,
+      metadata: {
+        created_at: new Date().toISOString(),
+        customer_email: null, // Will be collected during checkout
+        order_status: 'draft'
+      }
+    };
+  };
+
+  const handleLayoutComplete = () => {
+    const layout = calculateLayout();
+    if (!layout) return;
+
+    // Prepare layout data for checkout
+    const printLayout = prepareLayoutForPrint();
+    if (!printLayout) return;
+
+    // You can add additional validation or processing here
+    // For now, we'll just log the layout data
+    console.log('Layout complete:', printLayout);
+  };
+
+  const handleCheckout = async () => {
+    try {
+      const layout = {
+        images: selectedIndices.map(index => ({
+          url: scrapedImages[index].url,
+          alt: scrapedImages[index].alt
+        })),
+        printSize: selectedSize
+      };
+
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(layout)
+      });
+
+      const { sessionId } = await response.json();
+      
+      // Redirect to Stripe checkout
+      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+      if (!stripe) throw new Error('Failed to load payment processor');
+      
+      await stripe.redirectToCheckout({ sessionId });
+    } catch (error) {
+      console.error('Checkout error:', error);
+      setError('Failed to process checkout');
+    }
+  };
+
+  const steps = [
+    {
+      title: 'Import Images',
+      description: 'Add Pinterest board URL',
+      status: !url ? 'current' : scrapedImages.length > 0 ? 'complete' : 'upcoming'
+    },
+    {
+      title: 'Select Images',
+      description: 'Choose photos for your layout',
+      status: !scrapedImages.length ? 'upcoming' : 
+        selectedIndices.length > 0 ? 'complete' : 'current'
+    },
+    {
+      title: 'Customize Layout',
+      description: 'Arrange and adjust photos',
+      status: !selectedIndices.length ? 'upcoming' : 'current'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-16">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
-            Pinterest Board to Print
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Transform your Pinterest inspiration into beautiful, high-quality prints.
-          </p>
-        </div>
-
-        <Card className="max-w-3xl mx-auto mb-12 border-2 border-gray-100 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4 text-gray-600">
-              <Info className="w-5 h-5" />
-              <p>Paste your Pinterest board URL below to get started</p>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="flex gap-4">
-                <input
-                  type="url"
-                  placeholder="https://pinterest.com/username/board-name"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:bg-blue-300 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95 shadow-md"
-                >
-                  {loading ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Loading...
-                    </span>
-                  ) : (
-                    'Generate Preview'
-                  )}
-                </button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        {error && (
-          <Alert variant="destructive" className="max-w-3xl mx-auto mb-8">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {scrapedImages.length > 0 && (
-          <div className="space-y-6">
-            <h3 className="text-2xl font-bold">Select Images for Print ({selectedIndices.length} chosen)</h3>
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 overflow-x-auto pb-4">
-              {scrapedImages.map((image, index) => {
-                const isSelected = selectedIndices.includes(index);
-                return (
-                  <div
-                    key={image.url}
-                    onClick={() => toggleImageSelection(index)}
-                    className={`relative aspect-[16/9] cursor-pointer transition-all group ${isSelected ? 'ring-2 ring-blue-500 scale-95' : 'hover:ring-2 hover:ring-gray-300'}`}
-                  >
-                    <img
-                      src={image.url}
-                      alt={image.alt}
-                      className="w-full h-full object-cover rounded-lg border border-gray-200"
-                      loading="lazy"
-                      style={{
-                        imageRendering: '-webkit-optimize-contrast',
-                      }}
-                    />
-                    {isSelected && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
-                        <CheckCircle2 className="w-6 h-6 text-white" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {selectedIndices.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-3xl font-bold mb-8">Arrange Your Layout</h2>
-            <PhotoLayoutGrid
-              scrapedImages={scrapedImages}
-              selectedIndices={selectedIndices}
-              onSelectionChange={setSelectedIndices}
-              gap={12} // Default gap
-              roundedness={0} // Default roundedness
+    <main className={theme.spacing.container}>
+      <StepIndicator steps={steps} />
+      
+      <div className={theme.spacing.stack}>
+        {/* URL Input Section */}
+        <section className={`${theme.components.card} ${theme.spacing.section}`}>
+          <div className="px-6">
+            <h2 className="text-2xl font-semibold mb-4">Import Your Pinterest Images</h2>
+            <URLInput 
+              url={url}
+              setUrl={setUrl}
+              onSubmit={handleSubmit}
+              loading={loading}
+              error={error}
             />
           </div>
+        </section>
+
+        {/* Image Selection Section - Reference existing code */}
+        {scrapedImages.length > 0 && (
+          <ImageSelectionSection 
+            images={scrapedImages}
+            selectedIndices={selectedIndices}
+            onSelectionChange={setSelectedIndices}
+          />
         )}
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-            <p className="text-gray-600">Loading your Pinterest board...</p>
-          </div>
+        {/* Layout Customization Section - Reference existing code */}
+        {selectedIndices.length > 0 && (
+          <LayoutCustomizationSection 
+            selectedImages={selectedIndices.map(i => scrapedImages[i])}
+            selectedSize={selectedSize}
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+            onSizeChange={setSelectedSize}
+            onLayoutComplete={handleLayoutComplete}
+          />
         )}
-      </main>
-    </div>
+
+        <div className="flex items-center space-x-4 mb-4">
+          <PrintSizeSelector
+            selectedSize={selectedSize}
+            onSizeChange={setSelectedSize}
+          />
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">
+              Gap Spacing
+            </label>
+            <input
+              type="range"
+              min="4"
+              max="32"
+              value={gapSpacing}
+              onChange={(e) => setGapSpacing(Number(e.target.value))}
+              className="w-32 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            />
+            <span className="text-sm text-gray-600">{gapSpacing}px</span>
+          </div>
+        </div>
+
+        <PhotoLayoutGrid
+          scrapedImages={scrapedImages}
+          selectedIndices={selectedIndices}
+          onSelectionChange={setSelectedIndices}
+          selectedSize={selectedSize}
+          onCheckout={handleCheckout}
+          gapSpacing={gapSpacing}
+          onGapChange={setGapSpacing}
+        />
+      </div>
+    </main>
   );
 }

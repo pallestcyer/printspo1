@@ -13,6 +13,15 @@ const nextConfig = {
         },
       ];
     },
+    images: {
+      domains: ['i.pinimg.com'], // Add Pinterest's image domain
+      remotePatterns: [
+        {
+          protocol: 'https',
+          hostname: '*.pinimg.com',
+        },
+      ],
+    },
   }
   
   module.exports = nextConfig
