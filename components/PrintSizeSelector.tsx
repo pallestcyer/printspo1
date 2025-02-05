@@ -6,36 +6,27 @@ interface PrintSizeSelectorProps {
   onSizeChange: (size: PrintSize) => void;
 }
 
-export const PrintSizeSelector = ({ selectedSize, onSizeChange }: PrintSizeSelectorProps) => {
+export function PrintSizeSelector({ selectedSize, onSizeChange }: PrintSizeSelectorProps) {
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-gray-700">
-        Print Size
-      </label>
-      <div className="flex gap-2">
-        {Object.values(PRINT_SIZES).map((size) => (
-          <button
-            key={size.name}
-            onClick={() => onSizeChange(size)}
-            className={`
-              relative p-4 rounded-lg border transition-all
-              ${selectedSize.name === size.name
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-              }
-            `}
-          >
-            <div
-              className="absolute inset-2 border border-gray-200 opacity-30"
-              style={{ aspectRatio: `${size.width}/${size.height}` }}
-            />
-            <div className="relative">
-              <div className="font-medium">{size.name}"</div>
-              <div className="text-sm text-gray-500">${size.price}</div>
-            </div>
-          </button>
-        ))}
-      </div>
+    <div className="flex gap-2">
+      {PRINT_SIZES.map((size) => (
+        <button
+          key={`${size.width}x${size.height}`}
+          onClick={() => onSizeChange(size)}
+          className={`
+            px-4 py-2 rounded-lg transition-all min-w-[100px]
+            ${selectedSize.width === size.width && selectedSize.height === size.height
+              ? 'bg-blue-50 ring-2 ring-blue-600'
+              : 'bg-white ring-1 ring-gray-200 hover:ring-gray-300'
+            }
+          `}
+        >
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-sm font-medium text-gray-700">{size.label}</span>
+            <span className="text-xs text-gray-500">${size.price}</span>
+          </div>
+        </button>
+      ))}
     </div>
   );
-}; 
+} 

@@ -18,6 +18,8 @@ interface LayoutCustomizationSectionProps {
   gapSpacing: number;
   onGapChange: (spacing: number) => void;
   onCheckout: () => Promise<void>;
+  containMode: boolean;
+  setContainMode: (mode: boolean) => void;
 }
 
 export const LayoutCustomizationSection = ({
@@ -29,38 +31,72 @@ export const LayoutCustomizationSection = ({
   onLayoutComplete,
   gapSpacing,
   onGapChange,
-  onCheckout
+  onCheckout,
+  containMode,
+  setContainMode
 }: LayoutCustomizationSectionProps) => {
+  const calculateGridColumns = () => {
+    const aspectRatio = selectedSize.width / selectedSize.height;
+    return aspectRatio >= 1 ? 2 : 1;
+  };
+
   return (
     <section className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="px-6 py-4">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-semibold">Customize Layout</h2>
-          <PrintSizeSelector
-            selectedSize={selectedSize}
-            onSizeChange={onSizeChange}
-          />
-        </div>
-
         <div className="space-y-6">
-          <div className="relative w-full mx-auto" style={{ 
-            maxWidth: 'min(800px, 90vw)',
-            aspectRatio: `${selectedSize.width}/${selectedSize.height}`,
-          }}>
-            <PhotoLayoutGrid
-              scrapedImages={selectedImages}
-              selectedIndices={Array.from({ length: selectedImages.length }, (_, i) => i)}
-              onSelectionChange={(newIndices) => {
-                const newSelectedImages = newIndices.map(index => selectedImages[index]);
-              }}
-              selectedSize={selectedSize}
-              spacing={spacing}
-              setSpacing={onSpacingChange}
-              onLayoutComplete={onLayoutComplete}
-              onCheckout={onCheckout}
-              gapSpacing={gapSpacing}
-              onGapChange={onGapChange}
-            />
+          <div className="flex items-center justify-between border-b pb-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold text-gray-900">Customize Your Print</h2>
+              <p className="text-sm text-gray-500">Choose size and adjust spacing to perfect your layout</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <PrintSizeSelector
+                selectedSize={selectedSize}
+                onSizeChange={onSizeChange}
+              />
+              <div className="flex items-center gap-4 px-4 border-l">
+                <GapControl
+                  value={spacing}
+                  onChange={onSpacingChange}
+                  label="Image spacing"
+                />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={containMode}
+                    onChange={(e) => setContainMode(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Show full images</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative w-full mx-auto" 
+            style={{ 
+              maxWidth: 'min(800px, 90vw)',
+              aspectRatio: `${selectedSize.width}/${selectedSize.height}`,
+              display: 'grid',
+              gridTemplateColumns: `repeat(${calculateGridColumns()}, 1fr)`,
+              gap: `${spacing}rem`,
+              padding: '1rem',
+              backgroundColor: '#f8f9fa',
+              borderRadius: '0.5rem'
+            }}
+          >
+            {selectedImages.map((image, index) => (
+              <div
+                key={index}
+                className="relative aspect-square overflow-hidden rounded-lg shadow-md"
+              >
+                <img
+                  src={image.url}
+                  alt={image.alt || ''}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              </div>
+            ))}
           </div>
         </div>
       </div>

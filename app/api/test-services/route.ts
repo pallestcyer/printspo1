@@ -11,6 +11,12 @@ export async function GET() {
   };
 
   try {
+    // Add environment variable check
+    console.log('KV Environment Variables:');
+    console.log('KV_URL:', process.env.KV_URL ? 'Set' : 'Not Set');
+    console.log('KV_REST_API_URL:', process.env.KV_REST_API_URL ? 'Set' : 'Not Set');
+    console.log('KV_REST_API_TOKEN:', process.env.KV_REST_API_TOKEN ? 'Set' : 'Not Set');
+
     console.log('Testing Stripe connection...');
     try {
       // Simpler Stripe test

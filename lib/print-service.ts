@@ -1,5 +1,7 @@
 import { getPrintSizeVariantId } from './stripe-helpers';
 import { PrintSize } from '@/app/types/order';
+import { kv } from '@vercel/kv';
+import type { PrintJob, Order } from '@/app/types/order';
 
 interface PrintJob {
   orderId: string;
@@ -8,28 +10,37 @@ interface PrintJob {
   shippingAddress: any;
 }
 
-export async function createPrintJob(job: PrintJob) {
-  // Integration with your print service (e.g., Printful, Gooten, etc.)
-  // This is an example structure - implement based on your chosen service
-  const response = await fetch('https://api.printservice.com/orders', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.PRINT_SERVICE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      external_id: job.orderId,
-      shipping_address: job.shippingAddress,
-      items: [{
-        variant_id: getPrintSizeVariantId(job.printSize),
-        files: [{
-          url: job.printFileUrl,
-          type: 'preview'
-        }],
-        quantity: 1
-      }]
-    })
-  });
+export async function createPrintJob({
+  orderId,
+  printFile,
+  printSize,
+  customerEmail
+}: {
+  orderId: string;
+  printFile: string;
+  printSize: { width: number; height: number };
+  customerEmail?: string;
+}) {
+  try {
+    // Create print job with your print service provider
+    const printJob = {
+      orderId,
+      printFile,
+      printSize,
+      customerEmail,
+      status: 'queued',
+      createdAt: new Date().toISOString()
+    };
 
-  return response.json();
+    // Store print job details
+    await kv.set(`printjob:${orderId}`, printJob);
+
+    // Here you would integrate with your print service
+    // For example: Printful, Gooten, etc.
+    
+    return printJob;
+  } catch (error) {
+    console.error('Print job creation error:', error);
+    throw error;
+  }
 } 

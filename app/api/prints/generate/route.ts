@@ -1,65 +1,87 @@
 import { NextResponse } from 'next/server';
-import PDFDocument from 'pdfkit';
+import { cloudinary } from '@/lib/cloudinary';
 import sharp from 'sharp';
-import fetch from 'node-fetch';
+import { createCanvas, loadImage } from 'canvas';
 
 export async function POST(request: Request) {
   try {
-    const { images, layout, printSize } = await request.json();
+    const { images, printSize, spacing, containMode, isPreview } = await request.json();
     
-    // Create a new PDF document
-    const doc = new PDFDocument({
-      size: [printSize.width * 72, printSize.height * 72], // Convert inches to points
-      margin: 0
-    });
-
-    // Buffer to store PDF
-    const chunks: Buffer[] = [];
-    doc.on('data', chunks.push.bind(chunks));
-
-    // Process each image
-    for (const image of images) {
-      // Fetch image
-      const response = await fetch(image.url);
-      const buffer = await response.arrayBuffer();
-
-      // Process image with sharp
-      const processedImage = await sharp(buffer)
-        .rotate(image.rotation || 0)
-        .resize({
-          width: Math.round(image.position.w * 72 * 4), // High resolution for print
-          height: Math.round(image.position.h * 72 * 4),
-          fit: 'cover'
-        })
-        .toBuffer();
-
-      // Add image to PDF
-      doc.image(processedImage, 
-        image.position.x * 72,
-        image.position.y * 72,
-        {
-          width: image.position.w * 72,
-          height: image.position.h * 72
-        }
-      );
+    if (!images?.length) {
+      return NextResponse.json({ error: 'No images provided' }, { status: 400 });
     }
 
-    doc.end();
+    // Create canvas with print dimensions
+    const canvas = createCanvas(
+      printSize.width * 300, // 300 DPI
+      printSize.height * 300
+    );
+    const ctx = canvas.getContext('2d');
 
-    // Combine chunks into final PDF buffer
-    const pdfBuffer = Buffer.concat(chunks);
+    // Process and layout images
+    const processedImages = await Promise.all(images.map(async (image) => {
+      // Upload to Cloudinary for optimization
+      const uploadResponse = await cloudinary.uploader.upload(image.url, {
+        folder: isPreview ? 'print-previews' : 'print-originals',
+        quality: isPreview ? 80 : 100,
+        format: isPreview ? 'jpg' : 'png',
+        transformation: [{
+          width: Math.round(image.position.w * printSize.width * 300),
+          height: Math.round(image.position.h * printSize.height * 300),
+          crop: containMode ? 'fit' : 'fill'
+        }]
+      });
 
-    // Return PDF as base64
+      // Draw image on canvas
+      const img = await loadImage(uploadResponse.secure_url);
+      ctx.save();
+      ctx.translate(
+        image.position.x * printSize.width * 300,
+        image.position.y * printSize.height * 300
+      );
+      ctx.rotate(image.rotation * Math.PI / 180);
+      ctx.drawImage(
+        img,
+        0, 0,
+        image.position.w * printSize.width * 300,
+        image.position.h * printSize.height * 300
+      );
+      ctx.restore();
+
+      return {
+        ...image,
+        cloudinaryId: uploadResponse.public_id,
+        printUrl: uploadResponse.secure_url,
+        previewUrl: cloudinary.url(uploadResponse.public_id, {
+          width: 800,
+          quality: 80,
+          format: 'jpg'
+        })
+      };
+    }));
+
+    // Upload final composite
+    const finalImage = await cloudinary.uploader.upload(
+      canvas.toDataURL(),
+      {
+        folder: isPreview ? 'print-previews' : 'print-finals',
+        quality: isPreview ? 80 : 100,
+        format: isPreview ? 'jpg' : 'png'
+      }
+    );
+
     return NextResponse.json({
-      pdf: pdfBuffer.toString('base64'),
+      preview: isPreview ? finalImage.secure_url : null,
+      printUrl: !isPreview ? finalImage.secure_url : null,
+      images: processedImages,
       success: true
     });
 
   } catch (error) {
-    console.error('PDF generation error:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate PDF' },
-      { status: 500 }
-    );
+    console.error('Print generation error:', error);
+    return NextResponse.json({
+      error: 'Failed to generate print',
+      details: error.message
+    }, { status: 500 });
   }
-} 
+}

@@ -26,13 +26,22 @@ export async function POST(req: Request) {
       const orderId = session.metadata?.orderId;
 
       if (orderId) {
+        // Get order details
         const order = await kv.get(`order:${orderId}`);
         if (!order) throw new Error('Order not found');
+
+        // Create print job
+        await createPrintJob({
+          orderId,
+          printFile: order.printFile,
+          printSize: order.printSize,
+          customerEmail: session.customer_details?.email
+        });
 
         // Update order status
         const updatedOrder = {
           ...order,
-          status: 'paid',
+          status: 'processing',
           paymentId: session.payment_intent,
           customerEmail: session.customer_details?.email,
         };

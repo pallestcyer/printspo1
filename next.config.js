@@ -9,7 +9,7 @@ const nextConfig = {
       return [
         {
           source: '/api/:path*',
-          destination: 'http://www.printspo.ca/api/:path*',
+          destination: 'http://localhost:3000/api/:path*',
         },
       ];
     },
