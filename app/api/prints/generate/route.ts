@@ -5,6 +5,7 @@ import { PrintSize } from '@/app/types/order';
 
 interface PrintImage {
   url: string;
+  alt?: string;
   position: {
     x: number;
     y: number;
@@ -32,7 +33,10 @@ cloudinary.config({
 export async function POST(req: Request) {
   try {
     console.log('Starting print generation...');
-    const { images, printSize, spacing, containMode = false, isPreview = false }: GenerateRequest = await req.json();
+    const body = await req.json();
+    console.log('Request body:', JSON.stringify(body, null, 2));
+    
+    const { images, printSize, spacing, containMode = false, isPreview = false }: GenerateRequest = body;
     
     if (!images?.length) {
       return NextResponse.json({ error: 'No images provided' }, { status: 400 });
