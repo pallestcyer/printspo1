@@ -2,12 +2,21 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import crypto from 'crypto';
 import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type Order } from '@/app/types/order';
+import { ORDER_STATUS, type Order, type OrderStatus, type Layout, type PrintSize } from '@/app/types/order';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
   typescript: true,
 });
+
+interface CreatePaymentIntentRequest {
+  layout: Layout;
+  printSize: PrintSize;
+  spacing?: number;
+  containMode?: boolean;
+  printFile?: string;
+  previewUrl?: string;
+}
 
 export async function POST(req: Request) {
   try {
@@ -28,8 +37,13 @@ export async function POST(req: Request) {
       id: orderId,
       layout,
       printSize,
-      status: ORDER_STATUS.PENDING,
-      createdAt: new Date().toISOString()
+      status: 'pending' as OrderStatus,
+      createdAt: new Date().toISOString(),
+      spacing: 0,
+      containMode: false,
+      customerEmail: undefined,
+      printFile: undefined,
+      previewUrl: undefined
     };
 
     await kv.set(`order:${orderId}`, order);

@@ -132,6 +132,8 @@ export function UnifiedCheckout({
         printSize={printSize}
         spacing={spacing}
         containMode={containMode}
+        isPortrait={printSize.height > printSize.width}
+        onRemoveImage={() => {}}
       />
       
       <div className="flex gap-4">

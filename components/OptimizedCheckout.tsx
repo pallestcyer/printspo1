@@ -119,7 +119,9 @@ export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: Opt
           layout={layout}
           printSize={printSize}
           spacing={spacing}
-          containMode={true} // Set to true or false based on your requirement
+          containMode={true}
+          isPortrait={printSize.height > printSize.width}
+          onRemoveImage={() => {}}
         />
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <AddressElement options={{ mode: 'shipping' }} />

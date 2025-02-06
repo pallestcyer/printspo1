@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import type { ScrapedImage } from '@/app/types/index';
@@ -13,80 +13,142 @@ export function ImageSelectionSection({ images, selectedIndices, onSelect }: Ima
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
+  const [isHoveringLeft, setIsHoveringLeft] = useState(false);
+  const [isHoveringRight, setIsHoveringRight] = useState(false);
 
   const scroll = (direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
-    
-    const scrollAmount = 300; // Adjust this value to control scroll distance
-    const newScrollLeft = scrollRef.current.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
-    
-    scrollRef.current.scrollTo({
-      left: newScrollLeft,
-      behavior: 'smooth'
-    });
+
+    const container = scrollRef.current;
+    const scrollAmount = 432; // Three items (144px * 3)
+
+    if (direction === 'left') {
+      container.scrollBy({
+        left: -scrollAmount,
+        behavior: 'smooth'
+      });
+    } else {
+      container.scrollBy({
+        left: scrollAmount,
+        behavior: 'smooth'
+      });
+    }
   };
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
     
-    setShowLeftArrow(scrollRef.current.scrollLeft > 0);
-    setShowRightArrow(
-      scrollRef.current.scrollLeft < 
-      scrollRef.current.scrollWidth - scrollRef.current.clientWidth
-    );
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setShowLeftArrow(scrollLeft > 5);
+    setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 5);
   };
+
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (scrollElement) {
+      handleScroll();
+      scrollElement.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleScroll);
+
+      return () => {
+        scrollElement.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleScroll);
+      };
+    }
+  }, []);
+
+  // Auto-scroll on hover
+  useEffect(() => {
+    let animationFrameId: number;
+    const scrollSpeed = 2;
+
+    const autoScroll = () => {
+      if (!scrollRef.current) return;
+
+      if (isHoveringLeft) {
+        scrollRef.current.scrollLeft -= scrollSpeed;
+      } else if (isHoveringRight) {
+        scrollRef.current.scrollLeft += scrollSpeed;
+      }
+
+      animationFrameId = requestAnimationFrame(autoScroll);
+    };
+
+    if (isHoveringLeft || isHoveringRight) {
+      animationFrameId = requestAnimationFrame(autoScroll);
+    }
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [isHoveringLeft, isHoveringRight]);
+
+  // Filter out selected images
+  const availableImages = images.filter((_, index) => !selectedIndices.includes(index));
 
   return (
     <div className="relative w-full max-w-full overflow-hidden">
       {showLeftArrow && (
-        <button
-          onClick={() => scroll('left')}
-          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white/80 p-2 rounded-full shadow-lg hover:bg-white"
-          aria-label="Scroll left"
+        <div
+          className="absolute left-0 top-0 bottom-0 w-16 z-10 flex items-center bg-gradient-to-r from-white/50 to-transparent"
+          onMouseEnter={() => setIsHoveringLeft(true)}
+          onMouseLeave={() => setIsHoveringLeft(false)}
         >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
+          <button
+            onClick={() => scroll('left')}
+            className="ml-2 bg-white/80 p-2 rounded-full shadow-lg hover:bg-white"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+        </div>
       )}
 
       {showRightArrow && (
-        <button
-          onClick={() => scroll('right')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white/80 p-2 rounded-full shadow-lg hover:bg-white"
-          aria-label="Scroll right"
+        <div
+          className="absolute right-0 top-0 bottom-0 w-16 z-10 flex items-center justify-end bg-gradient-to-l from-white/50 to-transparent"
+          onMouseEnter={() => setIsHoveringRight(true)}
+          onMouseLeave={() => setIsHoveringRight(false)}
         >
-          <ChevronRight className="w-6 h-6" />
-        </button>
+          <button
+            onClick={() => scroll('right')}
+            className="mr-2 bg-white/80 p-2 rounded-full shadow-lg hover:bg-white"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </div>
       )}
 
       <div
         ref={scrollRef}
-        onScroll={handleScroll}
         className="flex gap-4 overflow-x-auto scrollbar-hide py-4 px-2"
-        style={{ scrollSnapType: 'x mandatory' }}
+        style={{ 
+          width: '100%',
+          flexWrap: 'nowrap'
+        }}
       >
-        {images.map((image, index) => (
-          <div
-            key={`${image.url}-${index}`}
-            className={`
-              flex-none w-32 h-32 relative rounded-lg cursor-pointer
-              transition-all duration-200 ease-in-out
-              ${selectedIndices.includes(index) ? 'ring-4 ring-blue-500 scale-95' : 'hover:scale-105'}
-            `}
-            style={{ scrollSnapAlign: 'start' }}
-            onClick={() => onSelect(index)}
-          >
-            <Image
-              src={image.url}
-              alt={image.alt || ''}
-              fill
-              className="object-cover rounded-lg"
-              sizes="128px"
-            />
-            {selectedIndices.includes(index) && (
-              <div className="absolute inset-0 bg-blue-500/20 rounded-lg" />
-            )}
-          </div>
-        ))}
+        {availableImages.map((image, index) => {
+          const originalIndex = images.findIndex(img => img.url === image.url);
+          
+          return (
+            <div
+              key={`${image.url}-${originalIndex}`}
+              className="flex-none w-32 h-32 relative rounded-lg cursor-pointer transition-all duration-200 ease-in-out hover:scale-105 image-scroll-item"
+              onClick={() => onSelect(originalIndex)}
+            >
+              <Image
+                src={image.url}
+                alt={image.alt || ''}
+                fill
+                className="object-cover rounded-lg"
+                sizes="128px"
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

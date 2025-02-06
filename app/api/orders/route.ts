@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { kv } from '@vercel/kv';
 import crypto from 'crypto';
-import { ORDER_STATUS, type Order } from '@/app/types/order';
+import { ORDER_STATUS, type Order, type OrderStatus, type Layout, type PrintSize } from '@/app/types/order';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
@@ -11,17 +11,30 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
+interface CreateOrderRequest {
+  layout: Layout;
+  printSize: PrintSize;
+  spacing: number;
+  containMode?: boolean;
+  printFile?: string;
+  previewUrl?: string;
+}
+
 export async function POST(req: Request) {
   try {
-    const { layout, printSize } = await req.json();
+    const { layout, printSize, spacing, containMode, printFile, previewUrl } = await req.json();
     const orderId = crypto.randomUUID();
 
     const order: Order = {
       id: orderId,
       layout,
       printSize,
-      status: ORDER_STATUS.PENDING,
-      createdAt: new Date().toISOString()
+      status: 'pending' as OrderStatus,
+      createdAt: new Date().toISOString(),
+      spacing: spacing ?? 0, // Default to 0 if not provided
+      containMode: containMode ?? false, // Default to false if not provided
+      printFile: printFile,
+      previewUrl: previewUrl
     };
 
     // Create Stripe session

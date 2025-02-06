@@ -1,93 +1,60 @@
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
-import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { stripe } from '@/lib/api-clients';
+import { headers } from 'next/headers';
+import { kv } from '@vercel/kv';
+import { ORDER_STATUS, type Order, type OrderStatus } from '@/app/types/order';
 import { sendOrderConfirmation, sendAdminNotification } from '@/lib/email';
-import { createPrintJob } from '@/lib/print-service';
-import { ORDER_STATUS, type Order } from '@/app/types/order';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2022-11-15',
+  typescript: true,
+});
 
 // Configure route options
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  const body = await req.text();
-  const sig = headers().get('stripe-signature')!;
-
   try {
-    const event = stripe.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    const body = await req.text();
+    const signature = headers().get('stripe-signature')!;
+    const event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!);
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.metadata?.orderId;
-      const shippingAddress = session.shipping_details?.address;
+      
+      if (!orderId) throw new Error('No order ID in session metadata');
 
-      // Validate Toronto address
-      if (!shippingAddress?.city?.toLowerCase().includes('toronto') || 
-          !shippingAddress?.postal_code?.toLowerCase().startsWith('m')) {
-        console.error('Non-Toronto address detected:', shippingAddress);
-        return NextResponse.json(
-          { error: 'Sorry, we currently only deliver to Toronto addresses' },
-          { status: 400 }
-        );
-      }
+      const order = await kv.get(`order:${orderId}`) as Order | null;
+      if (!order) throw new Error('Order not found');
 
-      if (orderId) {
-        const order = await kv.get(`order:${orderId}`) as Order | null;
-        if (!order) throw new Error('Order not found');
+      // Clean and validate shipping address data
+      const shippingAddress = session.shipping_details ? {
+        name: session.shipping_details.name || undefined,
+        line1: session.shipping_details.address?.line1 || '',
+        line2: session.shipping_details.address?.line2 || undefined,
+        city: session.shipping_details.address?.city || '',
+        state: session.shipping_details.address?.state || '',
+        postal_code: session.shipping_details.address?.postal_code || '',
+        country: session.shipping_details.address?.country || ''
+      } : undefined;
 
-        if (!order.printFile) {
-          throw new Error('Print file not found for order');
-        }
+      const updatedOrder: Order = {
+        ...order,
+        status: ORDER_STATUS.PROCESSING,
+        paymentId: session.payment_intent as string,
+        customerEmail: session.customer_details?.email || undefined,
+        shippingAddress,
+        printJobCreatedAt: new Date().toISOString()
+      };
 
-        const customerEmail = session.customer_details?.email || undefined;
-        const customerName = session.shipping_details?.name;
+      await kv.set(`order:${orderId}`, updatedOrder);
 
-        await createPrintJob({
-          orderId,
-          printFile: order.printFile,
-          printSize: order.printSize,
-          customerEmail
-        });
-
-        const updatedOrder = {
-          ...order,
-          status: ORDER_STATUS.PROCESSING,
-          paymentId: session.payment_intent ? session.payment_intent.toString() : undefined,
-          email: customerEmail,
-          shippingAddress: shippingAddress ? {
-            name: customerName,
-            line1: shippingAddress.line1,
-            line2: shippingAddress.line2,
-            city: shippingAddress.city,
-            state: shippingAddress.state,
-            postal_code: shippingAddress.postal_code,
-            country: shippingAddress.country,
-          } : undefined
-        };
-
-        await kv.set(`order:${orderId}`, updatedOrder);
-
-        if (customerEmail) {
-          // Send customer confirmation
-          await sendOrderConfirmation(updatedOrder);
-          // Send admin notification with order details and PDF
-          await sendAdminNotification(updatedOrder);
-          // Send high-res PDF to admin
-          await fetch('/api/prints/email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              url: order.printFile,
-              printSize: order.printSize 
-            })
-          });
-        }
+      const customerEmail = session.customer_details?.email;
+      if (customerEmail) {
+        await sendOrderConfirmation(updatedOrder);
+        await sendAdminNotification(updatedOrder);
       }
     }
 

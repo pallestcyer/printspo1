@@ -2,7 +2,13 @@
 const nextConfig = {
     reactStrictMode: true,
     images: {
-      domains: ['res.cloudinary.com'],
+      remotePatterns: [
+        {
+          protocol: 'https',
+          hostname: 'i.pinimg.com',
+          pathname: '/**',
+        },
+      ],
     },
     env: {
       NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,

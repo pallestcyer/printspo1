@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Replace } from 'lucide-react';
 import { ImageReplaceModal } from './ImageReplaceModal';
 import type { ScrapedImage } from '@/app/types/index';
@@ -29,6 +29,30 @@ export default function PhotoLayoutGrid({
 }: PhotoLayoutGridProps) {
   const [replaceModalOpen, setReplaceModalOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setStartX(e.pageX - (gridRef.current?.offsetLeft || 0));
+    setScrollLeft(gridRef.current?.scrollLeft || 0);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const x = e.pageX - (gridRef.current?.offsetLeft || 0);
+    const walk = (x - startX) * 2;
+    if (gridRef.current) {
+      gridRef.current.scrollLeft = scrollLeft - walk;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
 
   const handleImageReplace = (index: number) => {
     setSelectedImageIndex(index);
@@ -45,49 +69,56 @@ export default function PhotoLayoutGrid({
     }
   };
 
+  // Filter out images that are already in the print board
+  const availableImages = scrapedImages.filter((_, index) => !selectedIndices.includes(index));
+
   return (
     <div className="space-y-6">
       <div className="relative">
         <div
-          className="grid gap-4"
+          ref={gridRef}
+          className="grid gap-4 cursor-grab active:cursor-grabbing"
           style={{
             gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
             gap: `${gapSpacing}px`,
             maxHeight: '70vh',
             overflowY: 'auto',
-            padding: '1rem'
+            overflowX: 'auto',
+            padding: '1rem',
+            userSelect: 'none'
           }}
         >
-          {scrapedImages.map((image, index) => (
-            <div
-              key={`${image.url}-${index}`}
-              className={`
-                relative group cursor-pointer
-                ${selectedIndices.includes(index) ? 'ring-2 ring-blue-500' : ''}
-              `}
-              onClick={() => {
-                const newIndices = selectedIndices.includes(index)
-                  ? selectedIndices.filter(i => i !== index)
-                  : [...selectedIndices, index];
-                onSelectionChange(newIndices);
-              }}
-              style={{
-                aspectRatio: '1',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                transition: 'all 0.2s ease-in-out'
-              }}
-            >
-              <img
-                src={image.url}
-                alt={image.alt || ''}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-20 transition-opacity duration-200" />
-            </div>
-          ))}
+          {availableImages.map((image, i) => {
+            const originalIndex = scrapedImages.findIndex(img => img.url === image.url);
+            
+            return (
+              <div
+                key={`${image.url}-${originalIndex}`}
+                className="relative group cursor-pointer"
+                onClick={() => {
+                  if (!isDragging) {
+                    onSelectionChange([...selectedIndices, originalIndex]);
+                  }
+                }}
+              >
+                <div className="relative aspect-square rounded-lg overflow-hidden shadow-md">
+                  <img
+                    src={image.url}
+                    alt={image.alt || ''}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    draggable={false}
+                  />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-20 transition-opacity duration-200" />
+                  
+                  {/* Border highlight on hover */}
+                  <div 
+                    className="absolute inset-0 ring-2 ring-blue-500 ring-opacity-0 group-hover:ring-opacity-50 transition-all duration-200"
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

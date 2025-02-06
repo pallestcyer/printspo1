@@ -36,15 +36,38 @@ export interface PrintOrder {
 
 export interface Order {
   id: string;
-  layout: Layout;
-  printSize: PrintSize;
+  layout: {
+    images: Array<{
+      url: string;
+      alt?: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }>;
+  };
+  printSize: {
+    width: number;
+    height: number;
+    price: number;
+    name?: string;
+  };
   status: OrderStatus;
   createdAt: string;
   printFile?: string;
-  paymentId?: string;
+  previewUrl?: string;
   email?: string;
   customerEmail?: string;
-  spacing?: number;
+  paymentId?: string;
+  spacing: number;
+  containMode?: boolean;
+  shippingAddress?: {
+    name?: string;
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
   trackingNumber?: string;
   printJobCreatedAt?: string;
 }
@@ -81,9 +104,9 @@ export const PRINT_SIZES: PrintSize[] = [
 export interface Layout {
   images: Array<{
     url: string;
+    alt?: string;
     position: { x: number; y: number; w: number; h: number };
     rotation: number;
-    alt?: string;
   }>;
 }
 

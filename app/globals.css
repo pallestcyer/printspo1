@@ -220,6 +220,8 @@ body {
   background-color: white;
   display: flex;
   flex-direction: column;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .print-preview {

@@ -1,11 +1,24 @@
 import { Resend } from 'resend';
 import type { Order } from '@/app/types/order';
 
+if (!process.env.RESEND_API_KEY) {
+  throw new Error('RESEND_API_KEY is not configured in environment variables');
+}
+
+if (!process.env.ADMIN_EMAIL) {
+  throw new Error('ADMIN_EMAIL is not configured in environment variables');
+}
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 // Resend offers 100 emails/day free, then $0.80/1000 emails
 
 export async function sendOrderConfirmation(order: Order) {
   try {
+    if (!order.email) {
+      console.error('No email address provided for order:', order.id);
+      return false;
+    }
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -40,13 +53,16 @@ export async function sendOrderConfirmation(order: Order) {
     `;
     
     const result = await resend.sendEmail({
-      from: 'orders@yourdomain.com',
-      to: order.email!,
+      from: 'Printspo <orders@printspo.ca>',
+      to: order.email,
       subject: `Order Confirmation #${order.id}`,
-      html
+      html,
+      reply_to: 'support@printspo.ca',
+      text: `Thank you for your order! Order ID: ${order.id}. View status: ${process.env.NEXT_PUBLIC_BASE_URL}/orders/${order.id}/track`
     });
 
     if ('error' in result) {
+      console.error('Resend API error:', result.error);
       throw new Error(result.error.message);
     }
     
@@ -73,6 +89,17 @@ export async function sendAdminNotification(order: Order) {
               <p>Size: ${order.printSize.width}" × ${order.printSize.height}"</p>
               <p>Price: $${order.printSize.price}</p>
             </div>
+
+            ${order.shippingAddress ? `
+              <div style="margin-top: 24px;">
+                <h2>Shipping Address:</h2>
+                <p>${order.shippingAddress.name}</p>
+                <p>${order.shippingAddress.line1}</p>
+                ${order.shippingAddress.line2 ? `<p>${order.shippingAddress.line2}</p>` : ''}
+                <p>${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.postal_code}</p>
+                <p>${order.shippingAddress.country}</p>
+              </div>
+            ` : ''}
             
             <div style="margin-top: 24px;">
               <a href="${process.env.NEXT_PUBLIC_BASE_URL}/admin/orders/${order.id}" 
@@ -89,7 +116,8 @@ export async function sendAdminNotification(order: Order) {
       from: 'Printspo <orders@printspo.ca>',
       to: process.env.ADMIN_EMAIL!,
       subject: `New Order #${order.id}`,
-      html
+      html,
+      text: `New order #${order.id} received. Size: ${order.printSize.width}"x${order.printSize.height}". Customer: ${order.email}`
     });
 
     if ('error' in result) {
