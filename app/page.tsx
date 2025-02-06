@@ -22,6 +22,7 @@ import { PrintBoardPreview } from '@/components/PrintBoardPreview';
 import type { ScrapedImage } from '@/app/types/index';
 import Image from 'next/image';
 import { CheckoutFlow } from '@/components/CheckoutFlow';
+import { LayoutCustomizationSection } from '@/components/LayoutCustomizationSection';
 
 // Maximum number of images supported by any layout
 const MAX_IMAGES = 12;
@@ -34,7 +35,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [spacing, setSpacing] = useState(0.5);
-  const [selectedSize, setSelectedSize] = useState<PrintSize | null>(PRINT_SIZES[0]);
+  const [selectedSize, setSelectedSize] = useState<PrintSize>(PRINT_SIZES[0]);
   const [gapSpacing, setGapSpacing] = useState(16);
   const [currentStep, setCurrentStep] = useState(1);
   const [containMode, setContainMode] = useState(false);
@@ -43,6 +44,7 @@ export default function Home() {
   const [scrollLeft, setScrollLeft] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [isPortrait, setIsPortrait] = useState(true);
 
   const handleSubmit = async (submittedUrl: string): Promise<void> => {
     setLoading(true);
@@ -199,9 +201,8 @@ export default function Home() {
     if (draggedImageIndex === null || draggedImageIndex === index) return;
 
     const newIndices = [...selectedIndices];
-    const draggedImage = newIndices[draggedImageIndex];
-    newIndices.splice(draggedImageIndex, 1);
-    newIndices.splice(index, 0, draggedImage);
+    const [removed] = newIndices.splice(draggedImageIndex, 1);
+    newIndices.splice(index, 0, removed);
     
     setSelectedIndices(newIndices);
     setDraggedImageIndex(index);
@@ -262,20 +263,16 @@ export default function Home() {
           
           <div className="space-y-6">
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
-              from
-              <span className="text-blue-600"> Pins </span>
-              to
-              <span className="text-blue-600"> Prints</span>
+              From Pins to Prints – Instantly
             </h1>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-              Whether it's your mood board, recipe collection, or creative inspiration – 
-              bring your pins to life with beautiful, high-quality prints.
+              Turn Pinterest boards into high-quality prints for mood boards, presentations, and inspiration walls.
             </p>
           </div>
 
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 shadow-sm">
             <p className="text-lg text-blue-800 font-medium">
-              ✨ Simply paste your Pinterest board URL and select your favorites.
+              ✨ Link your Pinterest board, select your vibe, and send to print.
             </p>
           </div>
         </div>
@@ -290,11 +287,11 @@ export default function Home() {
         </div>
 
         {scrapedImages.length > 0 && (
-          <div className="container mx-auto px-4 max-w-4xl pb-24">
-            <div className="flex flex-col gap-8">
+          <div className="container mx-auto px-2 sm:px-4 max-w-4xl pb-12 sm:pb-24">
+            <div className="flex flex-col gap-6 sm:gap-8">
               <section className="w-full space-y-4">
                 <h2 className="text-xl font-semibold mb-4 text-center">Select Images</h2>
-                <div className="bg-white rounded-lg shadow-lg p-4 mx-auto max-w-3xl">
+                <div className="bg-white rounded-lg shadow-lg p-2 sm:p-4 mx-auto max-w-3xl">
                   <ImageSelectionSection
                     images={scrapedImages}
                     selectedIndices={selectedIndices}
@@ -306,8 +303,7 @@ export default function Home() {
               {selectedIndices.length > 0 && (
                 <section className="w-full space-y-4">
                   <h2 className="text-xl font-semibold mb-4 text-center">Print Preview</h2>
-                  
-                  <div className="bg-white rounded-lg shadow-lg p-2 mx-auto max-w-3xl">
+                  <div className="bg-white rounded-lg shadow-lg p-2 sm:p-4 mx-auto max-w-3xl overflow-hidden">
                     <div className="relative">
                       <PrintBoardPreview
                         layout={{
@@ -318,57 +314,63 @@ export default function Home() {
                             rotation: 0
                           }))
                         }}
-                        printSize={selectedSize || PRINT_SIZES[0]}
+                        printSize={selectedSize}
                         spacing={spacing}
                         containMode={containMode}
-                        isPortrait={selectedSize ? selectedSize.height > selectedSize.width : true}
+                        isPortrait={isPortrait}
                         onRemoveImage={removeImage}
                       />
                       <div 
-                        className={`grid h-full w-full absolute inset-0 ${calculateGridLayout()}`}
-                        style={{ gap: `${spacing}rem`, padding: '1rem' }}
+                        className={`grid h-full w-full absolute inset-0`}
+                        style={{ 
+                          gridTemplateColumns: isPortrait 
+                            ? selectedIndices.length <= 2 ? 'repeat(1, 1fr)'
+                            : selectedIndices.length <= 4 ? 'repeat(2, 1fr)'
+                            : 'repeat(3, 1fr)'
+                            : selectedIndices.length <= 2 ? 'repeat(2, 1fr)'
+                            : selectedIndices.length <= 6 ? 'repeat(3, 1fr)'
+                            : 'repeat(4, 1fr)',
+                          gap: `${spacing}rem`,
+                          padding: '1rem',
+                          pointerEvents: 'none',
+                          touchAction: 'none'
+                        }}
                       >
                         {selectedIndices.map((_, index) => (
                           <div
                             key={index}
                             className="relative group"
+                            style={{ pointerEvents: 'auto' }}
                             draggable
-                            onDragStart={() => handleDragStart(index)}
-                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', index.toString());
+                              handleDragStart(index);
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              handleDragOver(e, index);
+                            }}
                             onDragEnd={handleDragEnd}
                           >
                             <button
                               onClick={() => removeImage(index)}
-                              className="absolute top-2 right-2 z-10 bg-white/90 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute top-2 right-2 z-20 bg-white/90 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors cursor-move" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors cursor-move rounded-lg" />
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm p-4 max-w-3xl mx-auto">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-4">
-                        <button
-                          onClick={() => setContainMode(!containMode)}
-                          className={`
-                            px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap
-                            ${containMode 
-                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }
-                          `}
-                        >
-                          Show Full Image
-                        </button>
-
-                        <div className="flex-1 flex items-center gap-2">
+                  <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 max-w-3xl mx-auto overflow-hidden">
+                    <div className="space-y-4 max-w-full">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div className="flex-1 flex items-center gap-2 min-w-[200px]">
                           <span className="text-sm text-gray-600 whitespace-nowrap">Spacing:</span>
                           <input
                             type="range"
@@ -377,34 +379,46 @@ export default function Home() {
                             step="0.1"
                             value={spacing}
                             onChange={(e) => setSpacing(parseFloat(e.target.value))}
-                            className="flex-1"
+                            className="flex-1 w-full"
                           />
                           <span className="text-sm text-gray-600 w-12">{spacing.toFixed(1)}rem</span>
                         </div>
 
-                        <button
-                          onClick={handlePreviewDownload}
-                          className="text-sm text-blue-600 hover:text-blue-700 font-medium whitespace-nowrap"
-                        >
-                          Download Preview
-                        </button>
-                      </div>
+                        <div className="flex flex-wrap gap-4 w-full sm:w-auto">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={containMode}
+                              onChange={(e) => setContainMode(e.target.checked)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">Show full images</span>
+                          </label>
 
-                      <div className="pt-4 border-t space-y-4">
-                        <div className="w-full">
-                          <PrintSizeSelector
-                            sizes={PRINT_SIZES}
-                            selectedSize={selectedSize}
-                            onSizeChange={setSelectedSize}
-                          />
+                          <button
+                            onClick={() => setIsPortrait(!isPortrait)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-gray-50 whitespace-nowrap"
+                            style={{
+                              backgroundColor: isPortrait ? '#EBF5FF' : 'white',
+                              borderColor: isPortrait ? '#3B82F6' : '#E5E7EB',
+                              color: isPortrait ? '#1D4ED8' : '#374151'
+                            }}
+                          >
+                            <svg 
+                              viewBox="0 0 24 24" 
+                              className="w-4 h-4"
+                              fill="none" 
+                              stroke="currentColor"
+                            >
+                              {isPortrait ? (
+                                <rect x="8" y="4" width="8" height="16" rx="1" strokeWidth="2" />
+                              ) : (
+                                <rect x="4" y="8" width="16" height="8" rx="1" strokeWidth="2" />
+                              )}
+                            </svg>
+                            {isPortrait ? 'Portrait' : 'Landscape'}
+                          </button>
                         </div>
-                        <button
-                          onClick={handleCheckout}
-                          className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
-                          disabled={selectedIndices.length === 0 || !selectedSize}
-                        >
-                          Checkout - ${selectedSize?.price.toFixed(2)}
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -415,7 +429,7 @@ export default function Home() {
         )}
 
         {error && (
-          <div className="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <div className="fixed top-4 right-4 left-4 sm:left-auto bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             {error}
           </div>
         )}

@@ -49,24 +49,28 @@ export const LayoutCustomizationSection = ({
     <section className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="px-6 py-4">
         <div className="space-y-6">
-          <div className="flex items-center justify-between border-b pb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b pb-4 gap-4">
             <div className="space-y-1">
               <h2 className="text-xl font-semibold text-gray-900">Customize Your Print</h2>
               <p className="text-sm text-gray-500">Choose size and adjust spacing to perfect your layout</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
               <PrintSizeSelector
                 sizes={PRINT_SIZES}
                 selectedSize={selectedSize}
                 onSizeChange={onSizeChange}
               />
-              <div className="flex items-center gap-4 px-4 border-l">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto border-l pl-4">
                 <GapControl
                   value={spacing}
                   onChange={onSpacingChange}
                   label="Image spacing"
+                  containMode={containMode}
+                  onContainModeChange={setContainMode}
+                  isPortrait={isPortrait}
+                  onOrientationChange={setIsPortrait}
                 />
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -104,7 +108,7 @@ export const LayoutCustomizationSection = ({
               </div>
             </div>
           </div>
-
+          
           <div className="relative w-full mx-auto" 
             style={{ 
               maxWidth: 'min(800px, 90vw)',

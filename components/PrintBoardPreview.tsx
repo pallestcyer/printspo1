@@ -41,7 +41,7 @@ export function PrintBoardPreview({ layout, printSize, spacing, containMode, isP
           aspectRatio: isPortrait 
             ? `${printSize.width}/${printSize.height}`
             : `${printSize.height}/${printSize.width}`,
-          maxWidth: 'min(800px, 90vw)',
+          maxWidth: 'min(800px, calc(100vw - 2rem))',
           padding: '1rem'
         }}
       >
@@ -64,6 +64,10 @@ export function PrintBoardPreview({ layout, printSize, spacing, containMode, isP
                   style={{
                     objectFit: containMode ? 'contain' : 'cover',
                     backgroundColor: 'white'
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.src = '/placeholder-image.png';
+                    console.error(`Failed to load image: ${image.url}`);
                   }}
                 />
               </div>
