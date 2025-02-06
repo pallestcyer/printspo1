@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
+import { Resend } from 'resend';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -8,9 +9,11 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 export async function POST(req: Request) {
   try {
-    const { url, printSize } = await req.json();
+    const { url, printSize, customerEmail } = await req.json();
     
     // Extract public ID from URL
     const matches = url.match(/\/v\d+\/(.+)\.pdf$/);
@@ -39,40 +42,38 @@ export async function POST(req: Request) {
     const pdfBuffer = await response.arrayBuffer();
     const base64Pdf = Buffer.from(pdfBuffer).toString('base64');
 
-    // Use the existing email utility with resend.dev domain
-    const emailData = {
-      from: 'Printspo <prints@printspo.ca>',  // Using Resend's default domain
+    // Send to admin
+    await resend.sendEmail({
+      from: 'Printspo <prints@printspo.ca>',
       to: process.env.ADMIN_EMAIL!,
-      subject: `Print Order - ${printSize.width}"x${printSize.height}"`,
+      subject: `New Print Order - ${printSize.width}"x${printSize.height}"`,
       text: `New print order received for size ${printSize.width}"x${printSize.height}"`,
       attachments: [{
-        filename: `print-${Date.now()}.pdf`,
         content: base64Pdf,
-        contentType: 'application/pdf'
+        filename: `print-${Date.now()}.pdf`
       }]
-    };
-
-    // Make the request directly to Resend's API
-    const emailResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(emailData)
     });
 
-    if (!emailResponse.ok) {
-      const error = await emailResponse.json();
-      throw new Error(`Resend API error: ${JSON.stringify(error)}`);
+    // Send to customer
+    if (customerEmail) {
+      await resend.sendEmail({
+        from: 'Printspo <prints@printspo.ca>',
+        to: customerEmail,
+        subject: 'Your Print Order Confirmation',
+        text: `Thank you for your order! Your ${printSize.width}"x${printSize.height}" print is being prepared.`,
+        html: `
+          <h1>Thank you for your order!</h1>
+          <p>Your ${printSize.width}"x${printSize.height}" print is being prepared.</p>
+          <p>We'll email you again when your order ships.</p>
+        `
+      });
     }
 
-    console.log('Email sent successfully');
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Email send error:', error);
+    console.error('Email error:', error);
     return NextResponse.json(
-      { error: 'Failed to send PDF', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to send email', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
