@@ -8,6 +8,7 @@ interface GapControlProps {
   min?: number;
   max?: number;
   step?: number;
+  label?: string;
 }
 
 export function GapControl({
@@ -15,12 +16,13 @@ export function GapControl({
   onChange,
   min = 0,
   max = 50,
-  step = 1
+  step = 1,
+  label = "Gap Spacing"
 }: GapControlProps) {
   return (
     <div className="w-full max-w-[280px] sm:max-w-full px-4 sm:px-6">
       <label className="block text-sm font-medium mb-2">
-        Gap Spacing
+        {label}
       </label>
       <Slider
         value={[value]}
