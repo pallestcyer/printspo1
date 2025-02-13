@@ -44,7 +44,7 @@ export async function POST(req: Request) {
 
     // Send to admin
     await resend.sendEmail({
-      from: 'Printspo <prints@printspo.ca>',
+      from: 'Printspo <orders@printspo.ca>',
       to: process.env.ADMIN_EMAIL!,
       subject: `New Print Order - ${printSize.width}"x${printSize.height}"`,
       text: `New print order received for size ${printSize.width}"x${printSize.height}"`,
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     // Send to customer
     if (customerEmail) {
       await resend.sendEmail({
-        from: 'Printspo <prints@printspo.ca>',
+        from: 'Printspo <orders@printspo.ca>',
         to: customerEmail,
         subject: 'Your Print Order Confirmation',
         text: `Thank you for your order! Your ${printSize.width}"x${printSize.height}" print is being prepared.`,

@@ -4,12 +4,15 @@ import Image from 'next/image';
 import type { ScrapedImage } from '@/app/types/index';
 
 interface ImageSelectionSectionProps {
-  images: ScrapedImage[];
+  images: any[];
   selectedIndices: number[];
   onSelect: (index: number) => void;
+  onRemove: (index: number) => void;
+  isMultiBoard: boolean;
+  boardIndex: number;
 }
 
-export function ImageSelectionSection({ images, selectedIndices, onSelect }: ImageSelectionSectionProps) {
+export function ImageSelectionSection({ images, selectedIndices, onSelect, onRemove, isMultiBoard, boardIndex }: ImageSelectionSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
@@ -85,7 +88,7 @@ export function ImageSelectionSection({ images, selectedIndices, onSelect }: Ima
     };
   }, [isHoveringLeft, isHoveringRight]);
 
-  // Filter out selected images
+  // Filter out already selected images
   const availableImages = images.filter((_, index) => !selectedIndices.includes(index));
 
   return (
@@ -130,7 +133,8 @@ export function ImageSelectionSection({ images, selectedIndices, onSelect }: Ima
           flexWrap: 'nowrap'
         }}
       >
-        {availableImages.map((image, index) => {
+        {availableImages.map((image, filteredIndex) => {
+          // Find the original index in the full images array
           const originalIndex = images.findIndex(img => img.url === image.url);
           
           return (

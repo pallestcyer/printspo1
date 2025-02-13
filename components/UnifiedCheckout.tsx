@@ -12,11 +12,7 @@ interface UnifiedCheckoutProps {
       rotation: number;
     }>;
   };
-  printSize: {
-    width: number;
-    height: number;
-    price: number;
-  };
+  printSize: PrintSize;
   spacing: number;
   containMode: boolean;
   onSuccess: (orderId: string) => void;
@@ -85,12 +81,18 @@ export function UnifiedCheckout({
         throw new Error('Failed to generate print file');
       }
 
+      // Assuming you have the size defined somewhere
+      const layoutWithSize = {
+        images: layout.images,
+        size: { width: printSize.width, height: printSize.height } // Add the size property
+      };
+
       // Create order and get Stripe session
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          layout,
+          layout: layoutWithSize, // Pass the updated layout
           printSize,
           spacing,
           printFile: printData.images[0].printUrl,
@@ -127,13 +129,26 @@ export function UnifiedCheckout({
 
   return (
     <div className="space-y-6">
-      <PrintBoardPreview 
-        layout={layout}
-        printSize={printSize}
+      <PrintBoardPreview
+        layout={{
+          ...layout,
+          size: {
+            width: printSize.width,
+            height: printSize.height
+          }
+        }}
+        printSize={{
+          ...printSize,
+          name: `${printSize.width}x${printSize.height}`
+        }}
         spacing={spacing}
         containMode={containMode}
         isPortrait={printSize.height > printSize.width}
+        cornerRounding={0}
         onRemoveImage={() => {}}
+        onImageSwap={() => {}}
+        index={0}
+        images={layout.images}
       />
       
       <div className="flex gap-4">

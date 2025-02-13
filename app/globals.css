@@ -29,6 +29,27 @@
   .aspect-3-4 {
     padding-bottom: 133.33%; /* 3:4 aspect ratio */
   }
+
+  .logo-spacing {
+    margin-bottom: 1.5rem;
+  }
+  
+  .section-spacing {
+    margin-bottom: 2rem;
+  }
+  
+  .content-spacing {
+    padding: 1.5rem;
+  }
+  
+  .header-container {
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    border-bottom: 1px solid rgb(229 231 235);
+  }
 }
 
 img {
@@ -135,27 +156,6 @@ body {
   aspect-ratio: 3 / 4;
 }
 
-/* Hover effect for image selection */
-.image-container:hover {
-  border: 2px solid #ccc;
-}
-
-.selected .image-container {
-  border: 2px solid #1e40af;
-}
-
-.selected::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1;
-}
-/* globals.css */
-
 /* Adjust layout grid to make sure it's visually appealing for horizontal previews */
 .grid-cols-3 {
   grid-template-columns: repeat(3, 1fr);
@@ -200,7 +200,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 0;
+  padding-top: 1rem;
 }
 
 .print-board {
@@ -266,4 +266,15 @@ body {
 .image-scroll-item {
   scroll-snap-align: start;
   scroll-snap-stop: always;
+}
+
+.print-board-preview {
+  display: grid;
+  gap: 10px; /* Space between images */
+}
+
+.image-container {
+  position: relative;
+  overflow: hidden; /* Hide overflow to maintain aspect ratio */
+  width: 100%; /* Full width of the grid cell */
 }

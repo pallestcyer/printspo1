@@ -1,0 +1,130 @@
+import React from 'react';
+import type { Layout } from '@/app/types';
+import type { PrintSize } from '@/app/types/order';
+
+interface PrintBoardPreviewProps {
+  layout: Layout | null;
+  printSize: PrintSize;
+  spacing: number;
+  containMode: boolean;
+  isPortrait: boolean;
+  onRemoveImage: (index: number) => void;
+  onReorderImages?: (newOrder: number[]) => void;
+  cornerRounding: number;
+  onImageSwap: (sourceIndex: number, targetIndex: number) => void;
+  index: number;
+  images: Array<{
+    url: string;
+    alt?: string;
+    position?: { x: number; y: number; w: number; h: number };
+    rotation?: number;
+  }>;
+}
+
+export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
+  images,
+  layout,
+  printSize,
+  spacing,
+  containMode,
+  isPortrait,
+  onRemoveImage,
+  onReorderImages,
+  cornerRounding,
+  onImageSwap,
+  index
+}) => {
+  const getGridConfig = (imageCount: number) => {
+    switch (imageCount) {
+      case 1: return { cols: 1, rows: 1 };
+      case 2: return { cols: 2, rows: 1 };
+      case 3: return { cols: 3, rows: 1 };
+      case 4: return { cols: 2, rows: 2 };
+      default: {
+        const cols = Math.ceil(Math.sqrt(imageCount));
+        const rows = Math.ceil(imageCount / cols);
+        return { cols, rows };
+      }
+    }
+  };
+
+  const getDisplayDimensions = () => {
+    const maxWidth = isPortrait ? 500 : 700;
+    const maxHeight = isPortrait ? 700 : 500;
+
+    const printAspectRatio = isPortrait 
+      ? printSize.height / printSize.width 
+      : printSize.width / printSize.height;
+
+    let width, height;
+    if (printAspectRatio > maxHeight / maxWidth) {
+      height = maxHeight;
+      width = height / printAspectRatio;
+    } else {
+      width = maxWidth;
+      height = width * printAspectRatio;
+    }
+
+    return { width, height };
+  };
+
+  const { width, height } = getDisplayDimensions();
+  const { cols, rows } = getGridConfig(images.length);
+
+  return (
+    <div>
+      <div className="space-y-4">
+        <div className="text-center text-sm text-gray-600 mb-2">
+          Print Size: {printSize.width}" × {printSize.height}"
+        </div>
+        <div className="flex justify-center">
+          <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
+            <div className="print-board-preview absolute inset-0 bg-white rounded-lg overflow-hidden border-2 border-gray-300"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                gridTemplateRows: `repeat(${rows}, 1fr)`,
+                gap: `${spacing}rem`,
+                padding: `${spacing}rem`,
+              }}
+            >
+              {images.map((image, imageIndex) => (
+                <div
+                  key={`preview-${image.url}-${imageIndex}`}
+                  className="image-container group relative overflow-hidden"
+                  style={{ 
+                    borderRadius: `${Math.min(cornerRounding * 2, 24)}px`,
+                    overflow: 'hidden'
+                  }}
+                >
+                  <img
+                    src={image.url}
+                    alt={image.alt || ''}
+                    className="absolute inset-0 w-full h-full transition-transform duration-200 group-hover:scale-105 cursor-move"
+                    style={{
+                      objectFit: containMode ? 'contain' : 'cover',
+                      transform: `rotate(${image.rotation || 0}deg)`,
+                      backgroundColor: 'white',
+                      borderRadius: `${Math.min(cornerRounding * 2, 24)}px`
+                    }}
+                  />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveImage(imageIndex);
+                    }}
+                    className="absolute top-2 right-2 bg-white/90 rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white z-10"
+                  >
+                    <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}; 

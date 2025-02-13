@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type PrintJob, type Order } from '@/app/types/order';
+import { ORDER_STATUS, type PrintJob, type Order, type PrintSize } from '@/app/types/order';
+
+interface OrderData {
+  orderId: string;
+  printFile: string;
+  printSize: PrintSize;
+  customerEmail: string;
+}
 
 export async function POST(request: Request) {
   try {
@@ -11,11 +18,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    // Create a copy of printSize with guaranteed name
+    const printSize: PrintSize = {
+      ...order.printSize,
+      name: order.printSize.name || `${order.printSize.width}x${order.printSize.height}`
+    };
+
     // Create print job
     const printJob: PrintJob = {
       orderId,
       printFile: order.printFile || '',
-      printSize: order.printSize,
+      printSize,
       customerEmail: order.customerEmail
     };
 

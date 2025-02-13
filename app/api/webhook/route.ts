@@ -1,61 +1,79 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { headers } from 'next/headers';
+import Stripe from 'stripe';
+import { Resend } from 'resend';
 import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type Order, type OrderStatus } from '@/app/types/order';
-import { sendOrderConfirmation, sendAdminNotification } from '@/lib/email';
+import { ORDER_STATUS, type Order } from '@/app/types/order';
+import { OrderConfirmationEmail } from '@/components/emails/OrderConfirmationEmail';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
-  typescript: true,
 });
+const resend = new Resend(process.env.RESEND_API_KEY);
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 // Configure route options
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const body = await req.text();
-    const signature = headers().get('stripe-signature')!;
-    const event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!);
+    const body = await request.text();
+    const headersList = headers();
+    const signature = headersList.get('stripe-signature')!;
+
+    // Verify webhook signature
+    const event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      webhookSecret
+    );
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      const orderId = session.metadata?.orderId;
       
-      if (!orderId) throw new Error('No order ID in session metadata');
-
-      const order = await kv.get(`order:${orderId}`) as Order | null;
-      if (!order) throw new Error('Order not found');
-
-      // Clean and validate shipping address data
-      const shippingAddress = session.shipping_details ? {
-        name: session.shipping_details.name || undefined,
-        line1: session.shipping_details.address?.line1 || '',
-        line2: session.shipping_details.address?.line2 || undefined,
-        city: session.shipping_details.address?.city || '',
-        state: session.shipping_details.address?.state || '',
-        postal_code: session.shipping_details.address?.postal_code || '',
-        country: session.shipping_details.address?.country || ''
-      } : undefined;
-
-      const updatedOrder: Order = {
-        ...order,
-        status: ORDER_STATUS.PROCESSING,
-        paymentId: session.payment_intent as string,
-        customerEmail: session.customer_details?.email || undefined,
-        shippingAddress,
-        printJobCreatedAt: new Date().toISOString()
-      };
-
-      await kv.set(`order:${orderId}`, updatedOrder);
-
-      const customerEmail = session.customer_details?.email;
-      if (customerEmail) {
-        await sendOrderConfirmation(updatedOrder);
-        await sendAdminNotification(updatedOrder);
+      // Add null check for success_url
+      if (!session.success_url) {
+        throw new Error('Missing success_url in session');
       }
+
+      const orderId = session.success_url.split('order=')[1];
+      
+      // Get order details from KV store
+      const order = await kv.get(`order:${orderId}`) as Order;
+      if (!order) throw new Error(`Order not found: ${orderId}`);
+
+      // Update order status
+      await kv.set(`order:${orderId}`, {
+        ...order,
+        status: ORDER_STATUS.PAID,
+        shippingAddress: session.shipping_details,
+        shippingOption: session.shipping_cost,
+        paymentStatus: session.payment_status,
+        customerEmail: session.customer_details?.email,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Get shipping method display name with proper null checks
+      const shippingRate = session.shipping_cost?.shipping_rate;
+      const shippingMethod = typeof shippingRate === 'object' && shippingRate
+        ? shippingRate.display_name || 'Standard Shipping'
+        : 'Standard Shipping';
+
+      // Send confirmation email using sendEmail
+      await resend.sendEmail({
+        from: 'Printspo <orders@printspo.ca>',
+        to: session.customer_details?.email!,
+        subject: `Order Confirmed - ${orderId}`,
+        react: OrderConfirmationEmail({
+          orderId,
+          customerName: session.shipping_details?.name,
+          shippingAddress: session.shipping_details,
+          shippingMethod,
+          orderDetails: [order],  // Wrap the order in an array
+          totalAmount: session.amount_total ? session.amount_total / 100 : 0,
+        }),
+      });
     }
 
     return NextResponse.json({ received: true });
@@ -67,3 +85,6 @@ export async function POST(req: Request) {
     );
   }
 }
+
+// Configure to only accept POST requests
+export const GET = () => new Response(null, { status: 405 });

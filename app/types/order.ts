@@ -4,7 +4,9 @@ export const ORDER_STATUS = {
   PROCESSING: 'processing',
   COMPLETED: 'completed',
   PAID: 'paid',
-  SHIPPED: 'shipped'
+  SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled'
 } as const;
 
 export type OrderStatus = typeof ORDER_STATUS[keyof typeof ORDER_STATUS];
@@ -76,28 +78,31 @@ export interface PrintSize {
   width: number;
   height: number;
   price: number;
-  name?: string;
+  name: string;
   label?: string;
 }
 
 export const PRINT_SIZES: PrintSize[] = [
   {
-    width: 5,
-    height: 7,
-    price: 4,
-    label: '5" × 7"'
+    width: 8,
+    height: 10,
+    price: 2499,
+    name: '8x10',
+    label: '8" × 10"'
   },
   {
-    width: 8.5,
-    height: 11,
-    price: 5,
-    label: '8.5" × 11"'
+    width: 11,
+    height: 14,
+    price: 3499,
+    name: '11x14',
+    label: '11" × 14"'
   },
   {
-    width: 12,
-    height: 18,
-    price: 6,
-    label: '12" × 18"'
+    width: 16,
+    height: 20,
+    price: 4999,
+    name: '16x20',
+    label: '16" × 20"'
   }
 ];
 

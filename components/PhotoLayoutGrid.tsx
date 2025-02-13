@@ -15,6 +15,8 @@ interface PhotoLayoutGridProps {
   spacing?: number;
   setSpacing?: (spacing: number) => void;
   onLayoutComplete?: () => void;
+  cornerRounding: number;
+  onCornerRoundingChange: (rounding: number) => void;
 }
 
 export default function PhotoLayoutGrid({
@@ -25,7 +27,9 @@ export default function PhotoLayoutGrid({
   onCheckout,
   gapSpacing = 16,
   onGapChange,
-  onLayoutComplete
+  onLayoutComplete,
+  cornerRounding,
+  onCornerRoundingChange
 }: PhotoLayoutGridProps) {
   const [replaceModalOpen, setReplaceModalOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
@@ -88,7 +92,7 @@ export default function PhotoLayoutGrid({
             userSelect: 'none'
           }}
         >
-          {availableImages.map((image, i) => {
+          {availableImages.map((image, filteredIndex) => {
             const originalIndex = scrapedImages.findIndex(img => img.url === image.url);
             
             return (
@@ -97,11 +101,11 @@ export default function PhotoLayoutGrid({
                 className="relative group cursor-pointer"
                 onClick={() => {
                   if (!isDragging) {
-                    onSelectionChange([...selectedIndices, originalIndex]);
+                    onSelectionChange([...selectedIndices, originalIndex].sort());
                   }
                 }}
               >
-                <div className="relative aspect-square rounded-lg overflow-hidden shadow-md">
+                <div className="relative aspect-square overflow-hidden shadow-md" style={{ borderRadius: `${cornerRounding}px` }}>
                   <img
                     src={image.url}
                     alt={image.alt || ''}
@@ -141,6 +145,20 @@ export default function PhotoLayoutGrid({
           selectedIndices={selectedIndices}
         />
       )}
+
+      {/* Corner Rounding Adjustment */}
+      <div className="flex items-center justify-between">
+        <label htmlFor="cornerRounding" className="text-sm text-gray-600">Corner Rounding:</label>
+        <input
+          type="range"
+          id="cornerRounding"
+          min="0"
+          max="50"
+          value={cornerRounding}
+          onChange={(e) => onCornerRoundingChange(Number(e.target.value))}
+          className="w-full"
+        />
+      </div>
     </div>
   );
 }

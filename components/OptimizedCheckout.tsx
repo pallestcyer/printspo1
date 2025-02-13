@@ -115,13 +115,23 @@ export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: Opt
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
       <div className="space-y-6">
-        <PrintBoardPreview 
-          layout={layout}
+        <PrintBoardPreview
+          layout={{
+            ...layout,
+            size: {
+              width: printSize.width,
+              height: printSize.height
+            }
+          }}
           printSize={printSize}
           spacing={spacing}
           containMode={true}
           isPortrait={printSize.height > printSize.width}
+          cornerRounding={0}
           onRemoveImage={() => {}}
+          onImageSwap={() => {}}
+          index={0}
+          images={layout.images}
         />
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <AddressElement options={{ mode: 'shipping' }} />

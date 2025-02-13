@@ -2,7 +2,7 @@ import { PRINT_SIZES } from '@/lib/constants';
 import type { PrintSize } from '@/app/types/order';
 
 interface PrintSizeSelectorProps {
-  sizes: Array<PrintSize>;
+  sizes: readonly PrintSize[];
   selectedSize: PrintSize | null;
   onSizeChange: (size: PrintSize) => void;
 }
