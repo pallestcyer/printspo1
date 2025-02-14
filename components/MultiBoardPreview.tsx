@@ -659,17 +659,29 @@ export function MultiBoardPreview({
                 <h2 className="text-3xl text-[#4D4D4D]"><i>Link your</i> <b>Board</b></h2> 
               </div>
               {/* Multi-board toggle */}
-              <div className="flex items-center gap-2">
-                <span className="text-md font-light text-[#B3B3B3]">Creating multiple boards?</span>
+              <div className="flex flex-col sm:flex-row justify-center gap-2 mt-4">
                 <button
                   onClick={() => setIsMultiMode(!isMultiMode)}
-                  className={`px-4 py-2 rounded-lg text-sm ${
-                    isMultiMode
-                      ? 'bg-[#D4A5A5]/50 text-[#4D4D4D] border border-[#D4A5A5]' 
-                      : 'bg-[#F7F7F7] text-[#4D4D4D] border border-gray-200'
-                  }`}
+                  className="w-full sm:w-auto px-4 py-2 text-sm border rounded-lg transition-colors"
+                  style={{
+                    borderColor: isMultiMode ? '#4D4D4D' : '#E5E7EB',
+                    backgroundColor: isMultiMode ? 'rgba(77,77,77,0.05)' : 'transparent',
+                    color: '#4D4D4D'
+                  }}
                 >
-                  {isMultiMode ? 'Multi-Board' : 'Single Board'}
+                  {isMultiMode ? 'Single Board Mode' : 'Multi-Board Mode'}
+                </button>
+                
+                <button
+                  onClick={handleCheckout}
+                  disabled={loading || !hasAnyScrapedImages(boards)}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#D4A5A5] text-white px-6 py-2 rounded-lg hover:bg-[#c99595] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>Checkout {boards.filter(board => board.selectedIndices.length > 0).length > 1 ? `(${boards.filter(board => board.selectedIndices.length > 0).length} Boards)` : ''}</>
+                  )}
                 </button>
               </div>
             </div>
