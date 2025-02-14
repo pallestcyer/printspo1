@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PrintBoardPreview } from './PrintBoardPreview';
 import { ImageSelectionSection } from './ImageSelectionSection';
 import { PRINT_SIZES } from '@/lib/constants';
@@ -64,6 +64,43 @@ interface Image {
   // Add other properties as needed
 }
 
+const calculateOrderTotal = (boards: Board[]) => {
+  return boards.reduce((total, board) => total + board.printSize.price, 0);
+};
+
+const generatePreview = async (board: Board) => {
+  try {
+    const response = await fetch('/api/preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        images: board.selectedIndices.map(index => ({
+          url: board.scrapedImages[index].url,
+          position: { x: 0, y: 0, w: 1, h: 1 },
+          rotation: 0
+        })),
+        printSize: board.printSize,
+        spacing: board.spacing,
+        containMode: board.containMode,
+        isPortrait: board.isPortrait,
+        cornerRounding: board.cornerRounding
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate preview');
+    }
+
+    const { url } = await response.json();
+    return url;
+  } catch (error) {
+    console.error('Preview generation failed:', error);
+    throw error;
+  }
+};
+
 export function MultiBoardPreview({
   scrapedImages,
   selectedBoards,
@@ -86,6 +123,7 @@ export function MultiBoardPreview({
   const [activeBoardIndex, setActiveBoardIndex] = useState(0);
   const [isMultiMode, setIsMultiMode] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState(PRINT_SIZES[0]);
   const [loadingStates, setLoadingStates] = useState<Record<string, number>>({});
@@ -93,6 +131,7 @@ export function MultiBoardPreview({
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const gridRef = useRef<HTMLDivElement>(null);
+  const [isReturningFromCheckout, setIsReturningFromCheckout] = useState(false);
 
   // Save boards state to localStorage whenever it changes
   useEffect(() => {
@@ -102,12 +141,35 @@ export function MultiBoardPreview({
   // Load boards from localStorage on initial mount
   useEffect(() => {
     try {
-      const savedBoards = localStorage.getItem('printBoards');
-      if (savedBoards) {
-        setBoards(JSON.parse(savedBoards));
+      const urlParams = new URLSearchParams(window.location.search);
+      const isFromStripe = urlParams.has('stripe');
+
+      if (isFromStripe) {
+        // If returning from Stripe, load from sessionStorage and preserve multi-board state
+        const savedState = sessionStorage.getItem('printspo_boards');
+        if (savedState) {
+          const { boards: savedBoards, activeBoardIndex: savedIndex, isMultiMode: savedMode } = JSON.parse(savedState);
+          setBoards(savedBoards);
+          setActiveBoardIndex(savedIndex);
+          setIsMultiMode(savedMode);
+          // Clear the session storage after restoring
+          sessionStorage.removeItem('printspo_boards');
+        }
+      } else {
+        // Normal page load - enforce single board mode
+        const savedBoards = localStorage.getItem('printBoards');
+        if (savedBoards) {
+          const parsedBoards = JSON.parse(savedBoards);
+          if (parsedBoards.length > 1) {
+            setIsMultiMode(false); // Force single board mode
+            setBoards([parsedBoards[0]]); // Only take the first board
+          } else {
+            setBoards(parsedBoards);
+          }
+        }
       }
     } catch (e) {
-      console.error('Failed to load boards from localStorage:', e);
+      console.error('Failed to load boards:', e);
     }
   }, []);
 
@@ -121,10 +183,8 @@ export function MultiBoardPreview({
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
-      // Adjust image grid layout for mobile
-      setIsMultiMode(!isMobile);
       
-      // Handle orientation changes
+      // Only handle orientation changes
       if (isMobile && window.innerHeight > window.innerWidth) {
         boards.forEach(board => {
           if (!board.isPortrait) {
@@ -137,7 +197,6 @@ export function MultiBoardPreview({
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Initial check
     return () => window.removeEventListener('resize', handleResize);
   }, [boards]);
 
@@ -145,27 +204,36 @@ export function MultiBoardPreview({
     return boards.some(board => board.scrapedImages.length > 0);
   };
 
-  const handleSubmit = async (boardIndex: number) => {
-    const board = boards[boardIndex];
-    setLoadingStates(prev => ({ ...prev, [board.id]: 5 }));
-    
+  const validateBoard = (board: Board): string | null => {
+    // Only check for duplicate URLs during import
+    const isDuplicate = boards.some(
+      existingBoard => 
+        existingBoard.id !== board.id && 
+        existingBoard.url === board.url
+    );
+
+    if (isDuplicate) {
+      return 'This board has already been imported';
+    }
+
+    // Only check for selected images during checkout
+    if (board.scrapedImages.length > 0 && !board.selectedIndices.length) {
+      return 'Please select at least one image';
+    }
+
+    return null;
+  };
+
+  const handleSubmit = async (index: number) => {
+    const board = boards[index];
+    setErrors(prev => ({ ...prev, [board.id]: '' }));
+    setError(null);
+
     try {
-      // Add connection check
+      setLoadingStates(prev => ({ ...prev, [board.id]: 0 }));
       if (!navigator.onLine) {
         throw new Error('Please check your internet connection');
       }
-
-      // Add image preload check
-      const imageLoadPromises = board.scrapedImages.map((img: Image) => 
-        new Promise<void>((resolve, reject) => {
-          const image = new window.Image();
-          image.onload = () => resolve();
-          image.onerror = () => reject(new Error(`Failed to load image: ${img.url}`));
-          image.src = img.url;
-        })
-      );
-
-      await Promise.all(imageLoadPromises);
 
       // Show initial loading progress
       setLoadingStates(prev => ({ ...prev, [board.id]: 30 }));
@@ -183,14 +251,15 @@ export function MultiBoardPreview({
       
       const data = await response.json();
       
-      // Update board with initial images
+      // Reset board state and preselect first 4 images
       const newBoards = [...boards];
-      newBoards[boardIndex] = {
+      newBoards[index] = {
         ...board,
         scrapedImages: data.images,
-        selectedIndices: data.images.length >= 4 
-          ? [0, 1, 2, 3] 
-          : data.images.map((image: { url: string; alt: string }, i: number) => i)
+        selectedIndices: data.images.length >= 4
+          ? [0, 1, 2, 3]
+          : Array.from({ length: data.images.length }, (_, i) => i),
+        name: data.name || board.name
       };
       setBoards(newBoards);
 
@@ -209,11 +278,11 @@ export function MultiBoardPreview({
           delete newState[board.id];
           return newState;
         });
-      }, 500);
+      }, 1000);
 
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      setError(errorMessage);
+    } catch (error) {
+      console.error('Board import error:', error);
+      setErrors(prev => ({ ...prev, [board.id]: 'Failed to import board' }));
       setLoadingStates(prev => ({ ...prev, [board.id]: -1 }));
     }
   };
@@ -229,64 +298,53 @@ export function MultiBoardPreview({
 
   const handleCheckout = async () => {
     try {
-      setError(null);
-      
-      // Save current state to sessionStorage before checkout
-      sessionStorage.setItem('printspo_boards', JSON.stringify({
-        boards,
-        activeBoardIndex,
-        timestamp: new Date().getTime()
+      // Generate preview images for each board
+      const boardPreviews = await Promise.all(
+        boards
+          .filter(board => board.selectedIndices.length > 0)
+          .map(async (board) => {
+            const previewUrl = await generatePreview(board);
+            return {
+              previewUrl,
+              printSize: board.printSize,
+              quantity: 1
+            };
+          })
+      );
+
+      // Create line items with CAD currency
+      const lineItems = boardPreviews.map(preview => ({
+        price_data: {
+          currency: 'cad',  // Explicitly set to CAD
+          product_data: {
+            name: `${preview.printSize.width}x${preview.printSize.height}" Print`,
+            images: [preview.previewUrl],
+          },
+          unit_amount: preview.printSize.price * 100,  // Convert to cents
+        },
+        quantity: preview.quantity,
       }));
 
-      // Validate boards first
-      const invalidBoards = boards.map(validateBoard).filter(Boolean);
-      if (invalidBoards.length > 0) {
-        setError(invalidBoards[0]);
-        return;
-      }
-
-      // Initialize Stripe checkout directly
-      const response = await fetch('/api/orders', {
+      const response = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          boards: boards.map((board) => ({
-            previewUrl: board.scrapedImages[board.selectedIndices[0]]?.url,
-            printSize: {
-              ...board.printSize,
-              price: Number(board.printSize.price)
-            },
-            settings: {
-              selectedIndices: board.selectedIndices,
-              spacing: board.spacing,
-              containMode: board.containMode,
-              isPortrait: board.isPortrait,
-              cornerRounding: board.cornerRounding,
-              scrapedImages: board.scrapedImages
-            }
-          }))
-        })
+          lineItems,
+          previewUrls: boardPreviews.map(p => p.previewUrl),
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to initialize payment');
+        throw new Error('Failed to create checkout session');
       }
 
-      const { sessionId } = await response.json();
-      
-      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-      if (!stripe) {
-        throw new Error('Failed to load payment processor');
-      }
-
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      if (error) {
-        throw error;
-      }
-
-    } catch (error) {
-      console.error('Checkout error:', error);
-      setError('An error occurred during checkout. Please try again.');
+      const { url } = await response.json();
+      window.location.href = url;
+    } catch (err) {
+      console.error('Order creation error:', err);
+      setError('Failed to create checkout session. Please try again.');
     }
   };
 
@@ -488,43 +546,6 @@ export function MultiBoardPreview({
     setBoards(newBoards);
   };
 
-  const validateBoard = (board: Board): string | null => {
-    // Check if URL is already imported in another board
-    const isDuplicate = boards.some(
-      existingBoard => 
-        existingBoard.id !== board.id && 
-        existingBoard.url === board.url
-    );
-
-    if (isDuplicate) {
-      return 'This board has already been imported';
-    }
-
-    if (!board.selectedIndices.length) {
-      return 'Please select at least one image';
-    }
-
-    return null;
-  };
-
-  useEffect(() => {
-    const savedState = sessionStorage.getItem('printspo_boards');
-    if (savedState) {
-      try {
-        const { boards: savedBoards, activeBoardIndex: savedIndex, timestamp } = JSON.parse(savedState);
-        // Only restore if the saved state is less than 1 hour old
-        if (Date.now() - timestamp < 3600000) {
-          setBoards(savedBoards);
-          setActiveBoardIndex(savedIndex);
-        } else {
-          sessionStorage.removeItem('printspo_boards');
-        }
-      } catch (error) {
-        console.error('Error restoring saved state:', error);
-      }
-    }
-  }, []);
-
   const handleImageSwap = (sourceIndex: number, targetIndex: number) => {
     setBoards(prevBoards => {
       const newBoards = [...prevBoards];
@@ -563,11 +584,23 @@ export function MultiBoardPreview({
   };
 
   const handleImageSelect = (index: number) => {
-    const newBoards = [...selectedBoards];
-    if (!newBoards[activeBoardIndex].selectedIndices.includes(index)) {
-      newBoards[activeBoardIndex].selectedIndices.push(index);
-      onBoardsChange(newBoards);
-    }
+    setBoards(prevBoards => {
+      const newBoards = [...prevBoards];
+      const currentBoard = {...newBoards[activeBoardIndex]};
+      
+      // Clear any invalid indices that might be stuck
+      currentBoard.selectedIndices = currentBoard.selectedIndices.filter(
+        idx => idx < currentBoard.scrapedImages.length
+      );
+      
+      // Add new selection if it doesn't exist
+      if (!currentBoard.selectedIndices.includes(index)) {
+        currentBoard.selectedIndices.push(index);
+      }
+      
+      newBoards[activeBoardIndex] = currentBoard;
+      return newBoards;
+    });
   };
 
   const handleImageRemove = (boardIndex: number, imageIndex: number) => {
@@ -603,22 +636,43 @@ export function MultiBoardPreview({
     name: "8.5x11"
   };
 
+  const FREE_SHIPPING_THRESHOLD = 59;
+
+  const orderTotal = calculateOrderTotal(boards);
+  const amountToFreeShipping = FREE_SHIPPING_THRESHOLD - orderTotal;
+
   return (
-    <main className={cn('min-h-screen bg-gray-50', className)}>
+    <main className={cn('min-h-screen', className)}>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
 
         {/* URL Input Section */}
-        <div className="bg-white rounded-xl p-6 shadow-lg max-w-3xl mx-auto mb-8">
-          <div className="mb-4 flex items-center justify-end gap-2">
-            <span className="text-sm text-[#2C2C2C]">Creating multiple boards?</span>
-            <button
-              onClick={() => setIsMultiMode(!isMultiMode)}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                isMultiMode ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              {isMultiMode ? 'Multi-Board Mode' : 'Single Board'}
-            </button>
+        <div className="bg-white rounded-xl p-6 max-w-3xl mx-auto mb-8">
+          <div className="relative">
+            {/* Step indicator */}
+            <div className="absolute -left-12 -top-10 w-12 h-12 bg-[#D4A5A5] rounded-full flex items-center justify-center">
+              <span className="font-serif font-[200] italic text-white text-5xl -mt-2">1</span>
+            </div>
+            
+            {/* Existing header content */}
+            <div className="flex items-end justify-between mb-4">
+              <div>
+                <h2 className="text-3xl text-[#4D4D4D]"><i>Link your</i> <b>Board</b></h2> 
+              </div>
+              {/* Multi-board toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-md font-light text-[#B3B3B3]">Creating multiple boards?</span>
+                <button
+                  onClick={() => setIsMultiMode(!isMultiMode)}
+                  className={`px-4 py-2 rounded-lg text-sm ${
+                    isMultiMode
+                      ? 'bg-[#D4A5A5]/50 text-[#4D4D4D] border border-[#D4A5A5]' 
+                      : 'bg-[#F7F7F7] text-[#4D4D4D] border border-gray-200'
+                  }`}
+                >
+                  {isMultiMode ? 'Multi-Board' : 'Single Board'}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* URL inputs */}
@@ -635,12 +689,12 @@ export function MultiBoardPreview({
                       newBoards[index].url = e.target.value;
                       setBoards(newBoards);
                     }}
-                    className="flex-1 p-4 border rounded-lg"
+                    className="flex-1 p-2 border rounded-lg focus:border-[#D4A5A5] focus:outline-none transition-colors"
                   />
                   {boards.length > 1 && (
                     <button
                       onClick={() => handleRemoveBoard(index)}
-                      className="p-2 text-red-600 hover:text-red-800"
+                      className="p-2 text-[#D4A5A5] hover:text-[#b38989] transition-colors"
                       aria-label="Remove board"
                     >
                       <X className="w-4 h-4" />
@@ -648,23 +702,26 @@ export function MultiBoardPreview({
                   )}
                   <button
                     onClick={() => handleSubmit(index)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-6 py-2.5 bg-[#D4A5A5] hover:bg-[#b38989] text-white rounded-lg font-light transition-all duration-200 flex items-center gap-2"
                   >
-                    Import Board
+                    <span>Import Board</span>
+                    {loadingStates[board.id] !== undefined && loadingStates[board.id] !== -1 && (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    )}
                   </button>
                 </div>
                 {/* Loading Progress Bar */}
                 {loadingStates[board.id] !== undefined && loadingStates[board.id] !== -1 && (
                   <div className="h-1 bg-gray-200 rounded overflow-hidden">
                     <div 
-                      className="h-full bg-blue-600 transition-all duration-300"
+                      className="h-full bg-[#D4A5A5] transition-all duration-300"
                       style={{ width: `${loadingStates[board.id]}%` }}
                     />
                   </div>
                 )}
-                {/* Error State */}
-                {loadingStates[board.id] === -1 && (
-                  <p className="text-sm text-red-600">Failed to import board</p>
+                {/* Board-specific error messages */}
+                {errors[board.id] && (
+                  <p className="text-sm text-[#D4A5A5] mt-2">{errors[board.id]}</p>
                 )}
               </div>
             ))}
@@ -684,9 +741,9 @@ export function MultiBoardPreview({
                 isPortrait: true,
                 cornerRounding: 0
               }])}
-              className="mt-4 w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500"
+              className="mt-4 w-full p-2 border-2 border-dashed border-gray-200 rounded-lg text-gray-500 hover:border-[#D4A5A5]"
             >
-              <Plus className="w-4 h-4 inline mr-2" />
+              <Plus className="w-3 h-4 inline mr-2" />
               Add Another Board
             </button>
           )}
@@ -715,12 +772,12 @@ export function MultiBoardPreview({
           </div>
         )}
 
-        {/* Active Board Preview */}
+        {/* Main Content Panel */}
         {boards[activeBoardIndex]?.scrapedImages.length > 0 && (
-          <div className="space-y-8">
+          <div className="bg-white rounded-xl p-8 max-w-3xl mx-auto space-y-8">
             {/* Image Selection Grid */}
-            <section className="bg-white rounded-lg shadow-lg p-4 max-w-3xl mx-auto">
-              <h2 className="text-xl font-semibold mb-4 text-[#2C2C2C] text-center">Select Images</h2>
+            <section>
+              <h2 className="text-xl font-normal mb-4 text-[#4D4D4D] text-center"><i>Select</i> <b>Images</b></h2>
               <ImageSelectionSection
                 images={boards[activeBoardIndex].scrapedImages}
                 selectedIndices={boards[activeBoardIndex].selectedIndices}
@@ -732,41 +789,38 @@ export function MultiBoardPreview({
             </section>
 
             {/* Print Board Preview with Controls */}
-            <section className="bg-white rounded-lg shadow-lg p-4 max-w-3xl mx-auto">
+            <section>
               <PrintBoardPreview
                 layout={{
-                  images: boards[activeBoardIndex].selectedIndices.map(index => ({
-                    url: boards[activeBoardIndex].scrapedImages[index].url,
-                    alt: boards[activeBoardIndex].scrapedImages[index].alt,
-                    position: { x: 0, y: 0, w: 1, h: 1 },
-                    rotation: 0
-                  })),
+                  images: boards[activeBoardIndex].selectedIndices
+                    .map(index => ({
+                      url: boards[activeBoardIndex].scrapedImages[index].url,
+                      alt: boards[activeBoardIndex].scrapedImages[index].alt,
+                      position: { x: 0, y: 0, w: 1, h: 1 },
+                      rotation: 0
+                    })),
                   size: {
                     width: boards[activeBoardIndex].printSize.width,
                     height: boards[activeBoardIndex].printSize.height
                   }
                 }}
-                images={boards[activeBoardIndex].scrapedImages}
                 printSize={boards[activeBoardIndex].printSize}
                 spacing={boards[activeBoardIndex].spacing}
                 containMode={boards[activeBoardIndex].containMode}
                 isPortrait={boards[activeBoardIndex].isPortrait}
                 cornerRounding={boards[activeBoardIndex].cornerRounding}
-                onRemoveImage={(index) => {
-                  const newBoards = [...boards];
-                  newBoards[activeBoardIndex].selectedIndices = 
-                    newBoards[activeBoardIndex].selectedIndices.filter((_, i) => i !== index);
-                  setBoards(newBoards);
-                }}
+                onRemoveImage={(index) => handleImageRemove(activeBoardIndex, index)}
                 onImageSwap={(sourceIndex, targetIndex) => handleImageSwap(sourceIndex, targetIndex)}
                 index={activeBoardIndex}
+                images={boards[activeBoardIndex].scrapedImages}
               />
 
-              {/* Layout Controls - Responsive Grid */}
-              <div className="mt-4 w-full max-w-2xl mx-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center mb-4">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Spacing</label>
+              {/* Layout Controls */}
+              <div className="mt-8 max-w-2xl mx-auto">
+                <div className="flex flex-wrap justify-center gap-2 max-w-[440px] mx-auto">
+                  {/* Spacing and Rounding Controls */}
+                  <div className="w-[210px]">
+                    <label className="text-sm font-medium text-[#4D4D4D] mb-1 block">Spacing</label>
                     <input
                       type="range"
                       min="0"
@@ -778,12 +832,12 @@ export function MultiBoardPreview({
                         newBoards[activeBoardIndex].spacing = parseFloat(e.target.value);
                         setBoards(newBoards);
                       }}
-                      className="w-full"
+                      className="w-full accent-[#4D4D4D]"
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">Rounding</label>
+                  <div className="w-[210px]">
+                    <label className="text-sm font-medium text-[#4D4D4D] mb-1 block">Rounding</label>
                     <input
                       type="range"
                       min="0"
@@ -794,22 +848,23 @@ export function MultiBoardPreview({
                         newBoards[activeBoardIndex].cornerRounding = parseInt(e.target.value);
                         setBoards(newBoards);
                       }}
-                      className="w-full"
+                      className="w-full accent-[#4D4D4D]"
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-2 justify-center">
+                {/* Cover/Portrait Controls */}
+                <div className="flex flex-wrap justify-center gap-2 max-w-[440px] mx-auto mt-2">
                   <button
                     onClick={() => {
                       const newBoards = [...boards];
                       newBoards[activeBoardIndex].containMode = !newBoards[activeBoardIndex].containMode;
                       setBoards(newBoards);
                     }}
-                    className={`flex-1 h-10 px-4 rounded-lg border transition-colors max-w-[200px] ${
+                    className={`w-[210px] h-10 px-4 rounded-lg border transition-colors ${
                       boards[activeBoardIndex].containMode
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-blue-300'
+                        ? 'border-[#4D4D4D] bg-[rgba(77,77,77,0.05)] text-[#4D4D4D]'
+                        : 'border-gray-200 text-[#4D4D4D]'
                     }`}
                   >
                     {boards[activeBoardIndex].containMode ? 'Cover' : 'Contain'}
@@ -821,10 +876,10 @@ export function MultiBoardPreview({
                       newBoards[activeBoardIndex].isPortrait = !newBoards[activeBoardIndex].isPortrait;
                       setBoards(newBoards);
                     }}
-                    className={`flex-1 h-10 px-4 rounded-lg border transition-colors max-w-[200px] ${
+                    className={`w-[210px] h-10 px-4 rounded-lg border transition-colors ${
                       boards[activeBoardIndex].isPortrait
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-blue-300'
+                        ? 'border-[#4D4D4D] bg-[rgba(77,77,77,0.05)] text-[#4D4D4D]'
+                        : 'border-gray-200 text-[#4D4D4D]'
                     }`}
                   >
                     {boards[activeBoardIndex].isPortrait ? 'Portrait' : 'Landscape'}
@@ -833,8 +888,7 @@ export function MultiBoardPreview({
               </div>
 
               {/* Print Size Selection */}
-              <div className="mt-6 border-t pt-6 max-w-2xl mx-auto">
-                <div className="text-sm font-medium text-gray-700 mb-3 text-center">Print Size</div>
+              <div className="mt-8">
                 <div className="flex flex-wrap justify-center gap-2">
                   {PRINT_SIZES.map((size) => (
                     <button
@@ -844,37 +898,70 @@ export function MultiBoardPreview({
                         newBoards[activeBoardIndex].printSize = size;
                         setBoards(newBoards);
                       }}
-                      className={`p-3 rounded-lg border text-sm transition-all w-[140px] ${
+                      className={`p-3 rounded-lg border text-sm transition-all w-[150px] ${
                         boards[activeBoardIndex].printSize.width === size.width &&
                         boards[activeBoardIndex].printSize.height === size.height
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 hover:border-blue-300'
+                          ? 'border-[#4D4D4D] bg-[rgba(77,77,77,0.05)] text-[#4D4D4D]'
+                          : 'border-gray-200 text-[#4D4D4D]'
                       }`}
                     >
-                      <div className="font-medium">{size.width}" × {size.height}"</div>
-                      <div className="text-gray-500">${size.price}</div>
+                      <div className="font-medium text-[#4D4D4D]">{size.width}" × {size.height}"</div>
+                      <div className="text-[#D4A5A5]">${size.price}</div>
                     </button>
                   ))}
                 </div>
               </div>
             </section>
+
+            {/* Pricing and Checkout Section */}
+            {orderTotal > 0 && (
+              <section className="border-t border-gray-100 pt-8">
+                <div className="bg-[#F7F7F7] rounded-lg p-4 mb-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[#4D4D4D]">
+                      <span className="font-light">Subtotal</span>
+                      <span className="font-serif">${orderTotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-[#4D4D4D]">
+                      <span className="font-light">Shipping</span>
+                      {orderTotal >= FREE_SHIPPING_THRESHOLD ? (
+                        <span className="font-serif italic text-[#D4A5A5]">Free</span>
+                      ) : (
+                        <span className="font-serif">$9.99</span>
+                      )}
+                    </div>
+                    <div className="border-t border-gray-200 pt-2 flex justify-between text-[#4D4D4D]">
+                      <span className="font-serif">Total</span>
+                      <span className="font-serif text-lg">
+                        ${(orderTotal + (orderTotal >= FREE_SHIPPING_THRESHOLD ? 0 : 9.99)).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {orderTotal < FREE_SHIPPING_THRESHOLD && (
+                    <p className="text-center text-[#4D4D4D] font-light text-sm mt-4">
+                      Add <span className="font-serif italic text-[#D4A5A5]">${(FREE_SHIPPING_THRESHOLD - orderTotal).toFixed(2)}</span> more for free shipping
+                    </p>
+                  )}
+                </div>
+
+                <button 
+                  onClick={handleCheckout}
+                  className="w-full bg-[#D4A5A5] text-white px-6 py-3 rounded-lg hover:bg-[#c99595] transition-colors"
+                >
+                  {isMultiMode 
+                    ? `Checkout ${boards.filter(board => board.selectedIndices.length > 0).length} Boards`
+                    : 'Checkout Board'
+                  }
+                </button>
+              </section>
+            )}
           </div>
         )}
 
-        {/* Checkout Section */}
-        {boards.some(board => board.selectedIndices.length > 0) && (
-          <div className="mt-8 max-w-3xl mx-auto">
-            <button 
-              onClick={handleCheckout}
-              className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
-            >
-              {isMultiMode ? 'Checkout All Boards' : 'Checkout'}
-            </button>
-          </div>
-        )}
-
+        {/* General error message */}
         {error && (
-          <div className="fixed top-4 right-4 left-4 sm:left-auto bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <div className="fixed top-4 right-4 left-4 sm:left-auto bg-[#D4A5A5]/10 border border-[#D4A5A5] text-[#D4A5A5] px-4 py-3 rounded">
             {error}
           </div>
         )}

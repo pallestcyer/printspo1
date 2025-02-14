@@ -78,17 +78,17 @@ export async function POST(request: Request) {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       shipping_address_collection: {
-        allowed_countries: ['US', 'CA', 'GB', 'AU', 'NZ'], // Add or remove countries as needed
+        allowed_countries: ['CA'],
       },
       shipping_options: [
         {
           shipping_rate_data: {
             type: 'fixed_amount',
             fixed_amount: {
-              amount: 0, // Free shipping
-              currency: 'usd',
+              amount: 999, // $9.99
+              currency: 'cad',
             },
-            display_name: 'Standard Shipping',
+            display_name: 'Canada Post Standard',
             delivery_estimate: {
               minimum: {
                 unit: 'business_day',
@@ -100,31 +100,12 @@ export async function POST(request: Request) {
               },
             },
           },
-        },
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: {
-              amount: 1500, // $15.00
-              currency: 'usd',
-            },
-            display_name: 'Express Shipping',
-            delivery_estimate: {
-              minimum: {
-                unit: 'business_day',
-                value: 1,
-              },
-              maximum: {
-                unit: 'business_day',
-                value: 2,
-              },
-            },
-          },
-        },
+        }
       ],
+      automatic_tax: { enabled: true },
       line_items: boards.map((board, index) => ({
         price_data: {
-          currency: 'usd',
+          currency: 'cad',
           product_data: {
             name: `Custom Print ${index + 1}`,
             description: `${board.printSize.width}" × ${board.printSize.height}" Print`,
@@ -135,8 +116,18 @@ export async function POST(request: Request) {
         quantity: 1,
       })),
       mode: 'payment',
-      success_url: `${baseUrl}/success?order=${orderId}`,
-      cancel_url: `${baseUrl}`,
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}?canceled=true`,
+      discounts: totalAmount >= 5900 ? [
+        {
+          coupon: (await stripe.coupons.create({
+            name: 'Free Shipping',
+            amount_off: 999,
+            currency: 'cad',
+            duration: 'once'
+          })).id
+        }
+      ] : undefined
     });
 
     // Store order data with the generated previews

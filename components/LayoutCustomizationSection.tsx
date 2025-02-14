@@ -46,7 +46,7 @@ export const LayoutCustomizationSection = ({
   };
 
   return (
-    <section className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <section className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <div className="px-6 py-4">
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b pb-4 gap-4">
@@ -83,11 +83,11 @@ export const LayoutCustomizationSection = ({
                   
                   <button
                     onClick={() => setIsPortrait(!isPortrait)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-gray-50"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm"
                     style={{
-                      backgroundColor: isPortrait ? '#EBF5FF' : 'white',
-                      borderColor: isPortrait ? '#3B82F6' : '#E5E7EB',
-                      color: isPortrait ? '#1D4ED8' : '#374151'
+                      backgroundColor: isPortrait ? 'rgba(212, 165, 165, 0.5)' : '#F7F7F7',
+                      borderColor: isPortrait ? '#D4A5A5' : '#E5E7EB',
+                      color: '#4D4D4D'
                     }}
                   >
                     <svg 
@@ -102,7 +102,7 @@ export const LayoutCustomizationSection = ({
                         <rect x="4" y="8" width="16" height="8" rx="1" strokeWidth="2" />
                       )}
                     </svg>
-                    {isPortrait ? 'Portrait' : 'Landscape'}
+                    Multi-Board
                   </button>
                 </div>
               </div>

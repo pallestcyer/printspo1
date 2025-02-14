@@ -79,7 +79,7 @@ export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
         </div>
         <div className="flex justify-center">
           <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
-            <div className="print-board-preview absolute inset-0 bg-white rounded-lg overflow-hidden border-2 border-gray-300"
+            <div className="print-board-preview absolute inset-0 bg-[#F7F7F7] rounded-lg overflow-hidden border border-gray-200"
               style={{
                 display: 'grid',
                 gridTemplateColumns: `repeat(${cols}, 1fr)`,

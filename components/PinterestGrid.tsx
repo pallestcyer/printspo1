@@ -53,8 +53,11 @@ const PinterestGrid = () => {
           className="border p-2 w-full"
           required
         />
-        <button type="submit" className="bg-blue-500 text-white p-2 mt-2">
-          Scrape Images
+        <button 
+          type="submit" 
+          className="bg-[#D4A5A5] text-white p-2 mt-2 rounded-md"
+        >
+          Import Board
         </button>
       </form>
 

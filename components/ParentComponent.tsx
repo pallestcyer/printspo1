@@ -26,19 +26,50 @@ const ParentComponent = () => {
     // Implement checkout logic
   };
 
-  useEffect(() => {
-    // Fetch images from the specific container
-    const container = document.querySelector('.XiG[data-test-id="board-feed"]');
-    if (container) {
-      const images = Array.from(container.querySelectorAll('img')).map(img => ({
-        url: img.src,
+  const handlePinterestUrl = async (url: string) => {
+    try {
+      const response = await fetch('/api/pinterest/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch Pinterest images');
+      }
+
+      const data = await response.json();
+      setScrapedImages(data.images.map((img: any) => ({
+        url: img.url,
         alt: img.alt || '',
         width: img.width,
         height: img.height
-      }));
-      setScrapedImages(images);
+      })));
+    } catch (error) {
+      console.error('Failed to fetch Pinterest images:', error);
     }
-  }, []); // Run once on component mount
+  };
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pinterestUrl = urlParams.get('pin');
+    
+    if (pinterestUrl) {
+      handlePinterestUrl(pinterestUrl);
+    } else {
+      // Existing container query logic
+      const container = document.querySelector('.XiG[data-test-id="board-feed"]');
+      if (container) {
+        const images = Array.from(container.querySelectorAll('img')).map(img => ({
+          url: img.src,
+          alt: img.alt || '',
+          width: img.width,
+          height: img.height
+        }));
+        setScrapedImages(images);
+      }
+    }
+  }, []);
 
   return (
     <PhotoLayoutGrid

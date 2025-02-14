@@ -91,6 +91,19 @@ body {
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-taviraj);
+  }
+
+  body {
+    font-family: var(--font-inter);
+  }
+
+  .image-selection-text {
+    font-family: var(--font-inter);
+    font-weight: 600;
+  }
 }
 
 @layer base {
@@ -182,7 +195,6 @@ body {
 .layout-preview {
   background-color: white;
   border-radius: 1rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   border: 1px solid rgb(229 231 235);
   height: fit-content;
   overflow: hidden;
@@ -191,7 +203,6 @@ body {
 .order-summary {
   background-color: white;
   border-radius: 1rem;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   border: 1px solid rgb(229 231 235);
 }
 
@@ -221,11 +232,11 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid rgb(229 231 235);
 }
 
 .print-preview {
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid rgb(229 231 235);
   overflow: hidden;
 }
 

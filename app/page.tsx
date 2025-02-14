@@ -3,33 +3,51 @@ import React from 'react';
 import { MultiBoardPreview } from '@/components/MultiBoardPreview';
 import Image from 'next/image';
 import DragDropProvider from '@/components/DndProvider';
-import { PrintBoardPreview } from '@/components/PrintBoardPreview';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 pt-24 pb-6 max-w-5xl">
+    <div className="min-h-screen bg-[#F7F7F7] flex flex-col">
+      <div className="container mx-auto px-4 py-8 max-w-5xl flex-grow">
         {/* Logo and Header Section */}
-        <header className="text-center mb-8">
-          <div className="w-48 h-48 mx-auto mb-4">
-            <Image
-              src="/PrintspoType.svg"
-              alt="Printspo Logo"
-              width={192}
-              height={192}
-              priority
-              className="text-[#2C2C2C]"
-            />
+        <header className="text-center mb-16">
+          <div className="inline-flex flex-col items-center">
+            <div className="w-40 h-40 mb-8">
+              <Image
+                src="/PrintspoType.svg"
+                alt="Printspo Logo"
+                width={160}
+                height={160}
+                priority
+                style={{ color: '#4D4D4D' }}
+              />
+            </div>
+            <div className="relative">
+              <h1 className="text-5xl md:text-6xl lg:text-7xl text-[#4D4D4D] mb-5 font-serif tracking-wide">
+                <span className="font-[700]">Pins</span>{' '}
+                <span className="font-[200] italic">to</span>{' '}
+                <span className="font-[700]">Prints</span>{' '}<br />
+                <span className="font-[600] italic text-[#D4A5A5]">– Instantly</span>
+              </h1>
+              <div className="absolute -top-10 -right-16">
+                <Image
+                  src="/CraftedInCanada.svg"
+                  alt="Crafted in Canada"
+                  width={70}
+                  height={70}
+                  className=""
+                />
+              </div>
+            </div>
+            <p className="text-2xl md:text-3xl text-[#4D4D4D] max-w-2xl font-sans font-light">
+              Turn Pinterest boards into high-quality prints.
+            </p>
+            <p className="text-md text-[#B3B3B3] mt-3 font-light">
+              Delivery within 2-3 Business Days Canada-Wide
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-[#2C2C2C] mb-2">
-            From Pins to Prints – Instantly
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Turn Pinterest boards into high-quality prints for mood boards, presentations, and inspiration walls.
-          </p>
         </header>
 
-        <main>
+        <main className="mt-18">
           <DragDropProvider>
             <div>
               <MultiBoardPreview scrapedImages={[]} selectedBoards={[]} onBoardsChange={() => {}} />
@@ -37,6 +55,37 @@ export default function Home() {
           </DragDropProvider>
         </main>
       </div>
+      
+      <footer className="w-full mt-16">
+        <div className="container mt-18 px-4 py-8 max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Image
+                src="/PrintspoType.svg"
+                alt="Printspo"
+                width={80}
+                height={80}
+                className="opacity-50"
+              />
+              <span className="font-light text-sm text-[#B3B3B3]">
+                © {new Date().getFullYear()} Printspo
+              </span>
+            </div>
+            
+            <div className="flex gap-12 font-light">
+              <a href="mailto:support@printspo.ca" className="text-sm text-[#B3B3B3] hover:text-[#D4A5A5] transition-colors">
+                Contact
+              </a>
+              <a href="/privacy" className="text-sm text-[#B3B3B3] hover:text-[#D4A5A5] transition-colors">
+                Privacy
+              </a>
+              <a href="/terms" className="text-sm text-[#B3B3B3] hover:text-[#D4A5A5] transition-colors">
+                Terms
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
