@@ -88,6 +88,7 @@ export async function POST(request: Request) {
     
     let pinterestUrl = url.trim();
     
+    // Handle pin.it URLs
     if (pinterestUrl.includes('pin.it')) {
       try {
         const response = await fetch(pinterestUrl, {
@@ -98,20 +99,23 @@ export async function POST(request: Request) {
           }
         });
         pinterestUrl = response.url;
-        console.log('Expanded short URL to:', pinterestUrl);
       } catch (error) {
         throw new Error('Unable to expand Pinterest short URL');
       }
     }
 
+    // Updated browser launch configuration for Vercel
     browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ]
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--single-process'
+      ],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      ignoreHTTPSErrors: true
     });
     
     const page = await browser.newPage();
