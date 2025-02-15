@@ -104,7 +104,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Updated browser launch configuration for Vercel
+    // Updated browser launch configuration with correct types
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -114,8 +114,7 @@ export async function POST(request: Request) {
         '--disable-dev-shm-usage',
         '--single-process'
       ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      ignoreHTTPSErrors: true
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     });
     
     const page = await browser.newPage();
