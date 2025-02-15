@@ -224,59 +224,89 @@ export function MultiBoardPreview({
     const board = boards[boardIndex];
     
     try {
+      if (!url.trim()) {
+        throw new Error('Please enter a Pinterest URL');
+      }
+
+      // Start loading state
       setLoadingStates(prev => ({ ...prev, [board.id]: 0 }));
       setErrors(prev => ({ ...prev, [board.id]: null }));
 
+      // Show initial loading progress
+      setLoadingStates(prev => ({ ...prev, [board.id]: 30 }));
+
       const response = await fetch('/api/scrape', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          url: url.trim() 
+        })
       });
 
+      setLoadingStates(prev => ({ ...prev, [board.id]: 60 }));
+
       if (!response.ok) {
-        throw new Error('Failed to import board');
+        const errorData = await response.json();
+        console.error('Scrape API error:', errorData);
+        throw new Error(errorData.details || 'Failed to import from Pinterest. Please check the URL and try again.');
       }
 
       const data = await response.json();
       
-      // Clear any existing selections and set initial selections
-      const initialSelectedIndices = data.images && data.images.length >= 4 
+      if (!data.images || !Array.isArray(data.images)) {
+        console.error('Invalid response format:', data);
+        throw new Error('Received invalid data from Pinterest. Please try again.');
+      }
+
+      if (data.images.length === 0) {
+        throw new Error('No images found. Please check if the URL is correct and the board is public.');
+      }
+
+      // Process the successful response
+      const initialSelectedIndices = data.images.length >= 4 
         ? [0, 1, 2, 3] 
-        : [];
+        : data.images.map((_: any, index: number) => index);
 
       setBoards(prevBoards => {
         const newBoards = [...prevBoards];
         newBoards[boardIndex] = {
           ...board,
           url,
-          name: data.name || '',
-          scrapedImages: data.images || [],
+          name: data.name || url.split('/').pop() || '',
+          scrapedImages: data.images,
           selectedIndices: initialSelectedIndices
         };
         return newBoards;
       });
 
-      // Set the active board to the newly imported one
       setActiveBoardIndex(boardIndex);
+      setLoadingStates(prev => ({ ...prev, [board.id]: 100 }));
       
-      // Clear loading state after successful import
-      setLoadingStates(prev => {
-        const newStates = { ...prev };
-        delete newStates[board.id];
-        return newStates;
-      });
-      
+      setTimeout(() => {
+        setLoadingStates(prev => {
+          const newStates = { ...prev };
+          delete newStates[board.id];
+          return newStates;
+        });
+      }, 500);
+
     } catch (error) {
       console.error('Board import error:', error);
-      setErrors(prev => ({ 
-        ...prev, 
-        [board.id]: error instanceof Error ? error.message : 'Failed to import board' 
-      }));
       setLoadingStates(prev => {
         const newStates = { ...prev };
         delete newStates[board.id];
         return newStates;
       });
+
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to import from Pinterest. Please try again.';
+      
+      setErrors(prev => ({ ...prev, [board.id]: errorMessage }));
+      setError(errorMessage);
     }
   };
 
