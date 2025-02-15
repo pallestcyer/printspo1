@@ -1,88 +1,72 @@
-import React, { useState, useEffect } from 'react';
-import PhotoLayoutGrid from './PhotoLayoutGrid';
-import type { PrintSize } from '@/app/types/order';
-import type { ScrapedImage } from '@/app/types/index';
+import React, { useState } from 'react';
+import { MultiBoardPreview } from '@/components/MultiBoardPreview';
+import Image from 'next/image';
+import DragDropProvider from '@/components/DndProvider';
+import { PRINT_SIZES } from '@/lib/constants';
+import type { Board } from '@/app/types';
 
 const ParentComponent = () => {
-  const [cornerRounding, setCornerRounding] = useState(0); // Initial corner rounding value
-  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
-  const [scrapedImages, setScrapedImages] = useState<ScrapedImage[]>([]); // State to hold images
-  const selectedSize: PrintSize = {
-    width: 8.5,
-    height: 11,
-    price: 5,
-    name: "8.5x11"
-  }; // Example size
-
-  const handleCornerRoundingChange = (rounding: number) => {
-    setCornerRounding(rounding);
-  };
-
-  const handleSelectionChange = (indices: number[]) => {
-    setSelectedIndices(indices);
-  };
-
-  const handleCheckout = async () => {
-    // Implement checkout logic
-  };
-
-  const handlePinterestUrl = async (url: string) => {
-    try {
-      const response = await fetch('/api/pinterest/fetch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch Pinterest images');
-      }
-
-      const data = await response.json();
-      setScrapedImages(data.images.map((img: any) => ({
-        url: img.url,
-        alt: img.alt || '',
-        width: img.width,
-        height: img.height
-      })));
-    } catch (error) {
-      console.error('Failed to fetch Pinterest images:', error);
-    }
-  };
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const pinterestUrl = urlParams.get('pin');
-    
-    if (pinterestUrl) {
-      handlePinterestUrl(pinterestUrl);
-    } else {
-      // Existing container query logic
-      const container = document.querySelector('.XiG[data-test-id="board-feed"]');
-      if (container) {
-        const images = Array.from(container.querySelectorAll('img')).map(img => ({
-          url: img.src,
-          alt: img.alt || '',
-          width: img.width,
-          height: img.height
-        }));
-        setScrapedImages(images);
-      }
-    }
-  }, []);
+  const [isMultiBoard, setIsMultiBoard] = useState(false);
+  const [boards, setBoards] = useState<Board[]>([{
+    id: Date.now().toString(),
+    url: '',
+    name: '',
+    scrapedImages: [],
+    selectedIndices: [],
+    printSize: PRINT_SIZES[0],
+    spacing: 0.5,
+    containMode: false,
+    isPortrait: true,
+    cornerRounding: 0
+  }]);
 
   return (
-    <PhotoLayoutGrid
-      scrapedImages={scrapedImages}
-      selectedIndices={selectedIndices}
-      onSelectionChange={handleSelectionChange}
-      selectedSize={selectedSize}
-      onCheckout={handleCheckout}
-      gapSpacing={16}
-      onGapChange={() => {}}
-      cornerRounding={cornerRounding}
-      onCornerRoundingChange={handleCornerRoundingChange}
-    />
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="container mx-auto px-4 py-4 max-w-5xl">
+        {/* Multi-board toggle in top right */}
+        <div className="absolute top-4 right-4">
+          <button
+            onClick={() => setIsMultiBoard(!isMultiBoard)}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+              isMultiBoard ? 'bg-[#D4A5A5] text-white' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {isMultiBoard ? 'Multi-Board Mode' : 'Single Board'}
+          </button>
+        </div>
+
+        {/* Logo and Header Section */}
+        <header className="text-center mb-6">
+          <div className="w-32 h-32 mx-auto mb-4">
+            <Image
+              src="/PrintspoType.svg"
+              alt="Printspo Logo"
+              width={128}
+              height={128}
+              priority
+              className="text-[#2C2C2C]"
+            />
+          </div>
+          <h1 className="text-3xl font-bold text-[#2C2C2C] mb-2">
+            From Pins to Prints – Instantly
+          </h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Turn Pinterest boards into high-quality prints for mood boards, presentations, and inspiration walls.
+          </p>
+        </header>
+
+        <main>
+          <DragDropProvider>
+            <MultiBoardPreview 
+              isMultiMode={isMultiBoard}
+              onMultiModeChange={setIsMultiBoard}
+              selectedBoards={boards}
+              onBoardsChange={setBoards}
+            />
+          </DragDropProvider>
+        </main>
+      </div>
+    </div>
   );
 };
 
