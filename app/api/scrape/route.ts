@@ -1,32 +1,82 @@
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 
+interface PinterestImage {
+  url: string;
+  alt: string;
+  width: number;
+  height: number;
+  id: string;
+}
+
 const MAX_IMAGES = 50;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000;
 
 async function autoScroll(page: any) {
-  try {
-    await page.evaluate(async () => {
-      await new Promise<void>((resolve) => {
-        let totalHeight = 0;
-        const distance = 100;
-        const maxScrolls = 50; // Limit scrolling
-        let scrollCount = 0;
-        
-        const timer = setInterval(() => {
-          const scrollHeight = document.body.scrollHeight;
-          window.scrollBy(0, distance);
-          totalHeight += distance;
-          scrollCount++;
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      let totalHeight = 0;
+      const distance = 100;
+      const timer = setInterval(() => {
+        const scrollHeight = document.body.scrollHeight;
+        window.scrollBy(0, distance);
+        totalHeight += distance;
 
-          if (totalHeight >= scrollHeight || scrollCount >= maxScrolls) {
-            clearInterval(timer);
-            resolve();
-          }
-        }, 100);
-      });
+        if (totalHeight >= scrollHeight) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
     });
-  } catch (error) {
-    console.log('Scroll completed or interrupted');
+  });
+}
+
+async function waitForTimeout(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Enhanced image validation function
+async function isValidImageUrl(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0',
+        'Referer': 'https://www.pinterest.com/'
+      }
+    });
+    
+    if (!response.ok) {
+      return false;
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType?.startsWith('image/')) {
+      return false;
+    }
+
+    // Check for reasonable file size (between 10KB and 20MB)
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      const size = parseInt(contentLength);
+      if (size < 10 * 1024 || size > 20 * 1024 * 1024) {
+        return false;
+      }
+    }
+
+    // Verify we can actually fetch the image
+    const imageResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0',
+        'Referer': 'https://www.pinterest.com/'
+      }
+    });
+
+    return imageResponse.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -35,100 +85,164 @@ export async function POST(request: Request) {
   try {
     const { url } = await request.json();
     console.log('Received URL:', url);
-    const MAX_PINS = 42;
     
-    // Handle short URLs first
     let pinterestUrl = url.trim();
-    console.log('Processing URL:', pinterestUrl);
-
+    
     if (pinterestUrl.includes('pin.it')) {
-      console.log('Expanding short URL...');
-      const response = await fetch(pinterestUrl, {
-        redirect: 'follow',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0'
-        }
-      });
-      pinterestUrl = response.url;
-      console.log('Expanded URL:', pinterestUrl);
+      try {
+        const response = await fetch(pinterestUrl, {
+          method: 'HEAD',
+          redirect: 'follow',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0'
+          }
+        });
+        pinterestUrl = response.url;
+        console.log('Expanded short URL to:', pinterestUrl);
+      } catch (error) {
+        throw new Error('Unable to expand Pinterest short URL');
+      }
     }
 
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ]
     });
     
     const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
     await page.setViewport({ width: 1920, height: 1080 });
 
-    console.log('Navigating to page...');
-    await page.goto(pinterestUrl, { 
-      waitUntil: 'networkidle0',
-      timeout: 30000 
-    });
+    let initialImages: PinterestImage[] = [];
+    let retryCount = 0;
 
-    // Wait for images to load
-    console.log('Waiting for images...');
-    try {
-      await page.waitForSelector('img[src*="pinimg.com"]', { 
-        timeout: 10000,
-        visible: true 
-      });
-    } catch (error) {
-      console.log('No Pinterest images found on initial load');
-      throw new Error('No Pinterest images found. Please check the URL.');
+    while (retryCount < MAX_RETRIES && initialImages.length === 0) {
+      try {
+        await page.goto(pinterestUrl, { 
+          waitUntil: 'networkidle0',
+          timeout: 30000 
+        });
+
+        // Enhanced access denied check
+        const accessDenied = await page.evaluate(() => {
+          const bodyText = document.body.textContent || '';
+          return bodyText.includes('Access Denied') || 
+                 bodyText.includes('Please verify you are a human') ||
+                 bodyText.includes('<Error>') ||
+                 bodyText.includes('<Code>AccessDenied</Code>');
+        });
+
+        if (accessDenied) {
+          console.log(`Attempt ${retryCount + 1}: Access denied, retrying...`);
+          await waitForTimeout(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+          retryCount++;
+          continue;
+        }
+
+        await page.waitForSelector('img[src*="pinimg.com"]', { timeout: 10000 });
+        
+        // Get initial images with enhanced filtering
+        initialImages = await page.evaluate(() => {
+          const images = document.querySelectorAll('img[src*="pinimg.com"]');
+          return Array.from(images, (img: Element) => {
+            const imgEl = img as HTMLImageElement;
+            const alt = imgEl.alt || '';
+            
+            // Skip images with error messages in alt text
+            if (alt.includes('Access Denied') || 
+                alt.includes('XML') || 
+                alt.includes('<Error>') ||
+                alt.includes('RequestId')) {
+              return null;
+            }
+
+            return {
+              url: imgEl.src,
+              alt: alt,
+              width: imgEl.naturalWidth,
+              height: imgEl.naturalHeight,
+              id: imgEl.src
+            };
+          }).filter((img): img is PinterestImage => 
+            img !== null && 
+            img.width >= 200 && 
+            img.height >= 200 && 
+            !img.url.includes('profile_') && 
+            !img.url.includes('avatar_') &&
+            !img.url.includes('75x75_') &&
+            !img.url.includes('236x')
+          );
+        });
+
+      } catch (error) {
+        console.log(`Attempt ${retryCount + 1} failed:`, error);
+        if (retryCount === MAX_RETRIES - 1) throw error;
+        await waitForTimeout(RETRY_DELAY * (retryCount + 1));
+        retryCount++;
+      }
     }
 
-    // Get images with detailed logging
-    const images = await page.evaluate(() => {
-      console.log('Evaluating page content...');
-      const images = document.querySelectorAll('img[src*="pinimg.com"]');
-      console.log('Found', images.length, 'potential images');
+    if (initialImages.length === 0) {
+      throw new Error('Unable to access Pinterest board after multiple attempts');
+    }
+
+    // Process and validate images with more thorough checks
+    console.log('Validating images...');
+    const processedImages: PinterestImage[] = [];
+    for (const img of initialImages) {
+      const highQualityUrl = img.url.replace(/\/[0-9]+x\//g, '/originals/').split('?')[0];
       
-      return Array.from(images, (img: Element) => {
-        const imgEl = img as HTMLImageElement;
-        return {
-          url: imgEl.src,
-          alt: imgEl.alt || '',
-          width: imgEl.naturalWidth,
-          height: imgEl.naturalHeight,
-          id: imgEl.src
-        };
-      }).filter(img => {
-        return img.width >= 200 && 
-               img.height >= 200 && 
-               !img.url.includes('profile_') && 
-               !img.url.includes('avatar_');
-      });
-    });
+      // Skip common error patterns in URLs
+      if (highQualityUrl.includes('error') || 
+          highQualityUrl.includes('placeholder') ||
+          highQualityUrl.includes('default')) {
+        continue;
+      }
 
-    console.log('Filtered images count:', images.length);
-
-    if (images.length === 0) {
-      throw new Error('No valid images found in the board');
+      // Validate the high-quality URL
+      console.log(`Validating image: ${highQualityUrl}`);
+      if (await isValidImageUrl(highQualityUrl)) {
+        processedImages.push({
+          ...img,
+          url: highQualityUrl
+        });
+      } else {
+        console.log(`Skipping invalid image: ${highQualityUrl}`);
+        // Try fallback to original URL if high quality fails
+        if (await isValidImageUrl(img.url)) {
+          processedImages.push(img);
+        }
+      }
     }
 
-    // Process and return images
-    const processedImages = images
-      .map(img => ({
-        ...img,
-        url: img.url.replace(/\/[0-9]+x\//g, '/736x/').split('?')[0]
-      }))
-      .slice(0, MAX_PINS);
+    // Remove duplicates and limit
+    const uniqueImages = processedImages
+      .filter((img, index, self) => 
+        index === self.findIndex(t => t.url === img.url)
+      )
+      .slice(0, MAX_IMAGES);
 
-    console.log('Returning', processedImages.length, 'images');
+    if (uniqueImages.length === 0) {
+      throw new Error('No valid images found in the Pinterest board');
+    }
 
+    console.log(`Successfully validated ${uniqueImages.length} images`);
     return NextResponse.json({ 
-      images: processedImages,
-      total: processedImages.length,
+      images: uniqueImages,
+      total: uniqueImages.length,
       status: 'complete'
     });
 
   } catch (error: any) {
-    console.error('Scraping error:', error);
+    console.error('Error scraping Pinterest:', error);
     return NextResponse.json({ 
-      error: error?.message || 'Failed to load Pinterest board',
-      details: error?.stack || 'Unknown error'
+      error: 'Failed to load Pinterest board',
+      details: error?.message || 'Unknown error'
     }, { status: 500 });
   } finally {
     if (browser) {

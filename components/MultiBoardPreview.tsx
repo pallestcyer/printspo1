@@ -6,9 +6,8 @@ import { PRINT_SIZES } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import Image from 'next/image';
-import { type PrintSize as ImportedPrintSize } from '@/app/types/order';
+import { type PrintSize as ImportedPrintSize, type Board as ImportedBoard, type ScrapedImage } from '@/app/types';
 import { cn } from '@/lib/utils';
-import { Board, BoardsState, BoardsStateSetter } from '@/app/types';
 
 interface LocalPrintSize {
   width: number;
@@ -19,9 +18,9 @@ interface LocalPrintSize {
 
 interface MultiBoardPreviewProps {
   isMultiMode: boolean;
-  onMultiModeChange: (value: boolean) => void;
-  selectedBoards: BoardsState;
-  onBoardsChange: BoardsStateSetter;
+  onMultiModeChange: (isMulti: boolean) => void;
+  selectedBoards: ImportedBoard[];
+  onBoardsChange: (boards: ImportedBoard[]) => void;
   className?: string;
 }
 
@@ -29,6 +28,32 @@ interface Image {
   url: string;
   alt?: string;
   // Add other properties as needed
+}
+
+interface Board {
+  id: string;
+  url: string;
+  name: string;
+  scrapedImages: ScrapedImage[];
+  selectedIndices: number[];
+  printSize: {
+    width: number;
+    height: number;
+    price: number;
+    name: string;
+  };
+  spacing: number;
+  containMode: boolean;
+  isPortrait: boolean;
+  cornerRounding: number;
+}
+
+interface LoadingStates {
+  [key: string]: number | undefined;
+}
+
+interface ErrorStates {
+  [key: string]: string | null;
 }
 
 const calculateOrderTotal = (boards: Board[]) => {
@@ -93,12 +118,12 @@ export function MultiBoardPreview({
   }]);
   const [activeBoardIndex, setActiveBoardIndex] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string | null }>({});
+  const [errors, setErrors] = useState<ErrorStates>({});
   const [error, setError] = useState<string | null>(null);
-  const [loadingStates, setLoadingStates] = useState<Record<string, number>>({});
+  const [loadingStates, setLoadingStates] = useState<LoadingStates>({});
   const [isReturningFromCheckout, setIsReturningFromCheckout] = useState(false);
-  
-  // Add drag-related state
+
+  // Add missing state variables for drag functionality
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -196,7 +221,7 @@ export function MultiBoardPreview({
   };
 
   const handleBoardImport = async (url: string, boardIndex: number) => {
-    const board = selectedBoards[boardIndex];
+    const board = boards[boardIndex];
     
     try {
       setLoadingStates(prev => ({ ...prev, [board.id]: 0 }));
@@ -219,7 +244,7 @@ export function MultiBoardPreview({
         ? [0, 1, 2, 3] 
         : [];
 
-      onBoardsChange(prevBoards => {
+      setBoards(prevBoards => {
         const newBoards = [...prevBoards];
         newBoards[boardIndex] = {
           ...board,
@@ -247,7 +272,6 @@ export function MultiBoardPreview({
         ...prev, 
         [board.id]: error instanceof Error ? error.message : 'Failed to import board' 
       }));
-      // Clear loading state on error
       setLoadingStates(prev => {
         const newStates = { ...prev };
         delete newStates[board.id];
@@ -570,6 +594,10 @@ export function MultiBoardPreview({
   };
 
   const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
     setIsDragging(false);
   };
 
