@@ -120,68 +120,35 @@ async function _ensureChromiumInTemp(): Promise<string> {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
-    let executablePath: string | undefined;
-    const options: any = {
-      args: chromiumConfig.args,
+    const executablePath = await chromium.executablePath();
+    const options = {
+      args: [
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-setuid-sandbox',
+        '--no-sandbox',
+        '--single-process',
+        '--no-zygote',
+        '--js-flags=--max-old-space-size=512'
+      ],
+      executablePath,
       defaultViewport: {
         width: 600,
         height: 800,
         deviceScaleFactor: 1,
       },
       headless: true,
-      ignoreHTTPSErrors: true,
-      protocolTimeout: 15000
+      ignoreHTTPSErrors: true
     };
 
-    if (isVercel) {
-      // Use @sparticuz/chromium on Vercel
-      executablePath = await chromium.executablePath();
-    } else {
-      // In local development, try to use locally installed Chrome/Chromium
-      if (process.platform === 'win32') {
-        // Windows paths
-        const possiblePaths = [
-          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-          process.env.CHROME_PATH // Allow custom path via env variable
-        ].filter(Boolean);
-
-        for (const path of possiblePaths) {
-          if (path && fs.existsSync(path)) {
-            executablePath = path;
-            break;
-          }
-        }
-      } else {
-        // Linux/Mac paths (for completeness)
-        const possiblePaths = [
-          '/usr/bin/google-chrome',
-          '/usr/bin/chromium-browser',
-          process.env.CHROME_PATH
-        ].filter(Boolean);
-
-        for (const path of possiblePaths) {
-          if (path && fs.existsSync(path)) {
-            executablePath = path;
-            break;
-          }
-        }
-      }
-    }
-
-    if (!executablePath) {
-      throw new Error('Chrome not found. Please install Google Chrome or set CHROME_PATH environment variable.');
-    }
-
-    options.executablePath = executablePath;
     const browser = await puppeteer.launch(options);
     return browser as PuppeteerBrowser;
-  } catch (_browserError: unknown) {
-    console.error('Browser launch error:', _browserError);
-    if (_browserError instanceof Error) {
-      throw new Error(`Failed to launch browser: ${_browserError.message}`);
+  } catch (error: unknown) {
+    console.error('Browser launch error:', error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to launch browser: ${error.message}`);
     }
-    throw _browserError;
+    throw error;
   }
 }
 
@@ -307,107 +274,89 @@ async function validateImages(images: PinterestImage[]): Promise<PinterestImage[
   return validatedImages;
 }
 
-export async function POST(req: Request): Promise<NextResponse> {
-  let browser: PuppeteerBrowser | undefined;
-  let page: PuppeteerPage | undefined;
-  
+export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const { url: inputUrl } = await req.json();
+    const { url } = await request.json();
     
-    if (!inputUrl) {
-      return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
-    }
-
-    if (!validatePinterestUrl(inputUrl)) {
-      return NextResponse.json({ 
-        error: 'Invalid Pinterest URL. Please make sure you\'re using a valid Pinterest board or pin.it URL.' 
-      }, { status: 400 });
-    }
-
-    // Shorter timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Operation timed out')), 20000);
-    });
-
-    const scrapePromise = async () => {
-      browser = await getBrowser();
-      page = await browser.newPage();
+    // Try Pinterest API approach first
+    try {
+      console.log('Attempting Pinterest API approach...');
+      const response = await fetch(url);
+      const html = await response.text();
       
-      await page.setDefaultNavigationTimeout(8000);
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
+      const images = extractImagesFromPinterestHtml(html);
       
-      // Set minimal viewport
-      await page.setViewport({
-        width: 800,
-        height: 600
+      // If we found images, return them
+      if (images && images.length > 0) {
+        console.log('Successfully extracted images using Pinterest API approach');
+        return NextResponse.json({ images });
+      }
+      
+      console.log('No images found with Pinterest API approach, falling back to Puppeteer...');
+    } catch (apiError) {
+      console.log('Pinterest API approach failed, falling back to Puppeteer...', apiError);
+    }
+    
+    // Fall back to Puppeteer approach
+    const browser = await getBrowser();
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 600, height: 800 });
+      await page.goto(url, { waitUntil: 'networkidle0' });
+      
+      const images = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('img[src*="pinimg.com"]'))
+          .slice(0, 50)
+          .map(img => {
+            const imgElement = img as HTMLImageElement;
+            const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
+            if (url.includes('avatar') || url.includes('profile')) return null;
+            
+            return {
+              url,
+              alt: imgElement.alt || '',
+              width: 1200,
+              height: 1200
+            };
+          })
+          .filter(Boolean);
       });
-
-      let expandedUrl = inputUrl;
-      if (inputUrl.includes('pin.it')) {
-        try {
-          expandedUrl = await expandShortUrl(inputUrl);
-        } catch (error) {
-          throw new Error('Failed to process shortened URL. Please try using the full Pinterest URL.');
-        }
-      }
-
-      try {
-        await page.goto(expandedUrl, { 
-          waitUntil: 'domcontentloaded',
-          timeout: 8000
-        });
-      } catch (_navigationError) {
-        throw new Error('Failed to load Pinterest board. Please check if the board is public and try again.');
-      }
-
-      const images = await Promise.race([
-        page.evaluate(extractImagesFromPage),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Image extraction timed out')), 6000)
-        )
-      ]) as PinterestImage[];
-
-      // Close browser immediately after getting images
-      await page.close();
+      
+      return NextResponse.json({ images });
+    } finally {
       await browser.close();
-      page = undefined;
-      browser = undefined;
-
-      if (!images || images.length === 0) {
-        throw new Error('No images found on this Pinterest board. Please check if the board is public and contains images.');
-      }
-
-      // Validate images in batches
-      const validatedImages = await validateImages(images);
-
-      if (validatedImages.length === 0) {
-        throw new Error('Could not access any images from this board. Please check if the images are publicly accessible.');
-      }
-
-      return { 
-        images: validatedImages,
-        total: validatedImages.length
-      };
-    };
-
-    const result = await Promise.race([scrapePromise(), timeoutPromise]);
-    return NextResponse.json(result);
-
+    }
+    
   } catch (error) {
-    console.error('Error scraping Pinterest:', error);
+    console.error('Scraping error:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to import from Pinterest. Please check the URL and try again.',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to scrape Pinterest images' },
       { status: 500 }
     );
-  } finally {
-    try {
-      if (page) await page.close();
-      if (browser) await browser.close();
-    } catch (_cleanupError) {
-      console.error('Error during cleanup:', _cleanupError);
+  }
+}
+
+function extractImagesFromPinterestHtml(html: string) {
+  // Try multiple regex patterns to find image URLs
+  const patterns = [
+    /"orig":{"url":"([^"]+)"/g,
+    /https:\/\/[^"']*?\.pinimg\.com\/originals\/[^"']+/g
+  ];
+  
+  let matches: string[] = [];
+  
+  for (const pattern of patterns) {
+    const found = [...html.matchAll(pattern)].map(match => match[1] || match[0]);
+    if (found.length > 0) {
+      matches = found;
+      break;
     }
   }
+  
+  return matches.map(url => ({
+    url: url.replace(/\\u002F/g, '/'),
+    alt: '',
+    width: 1200,
+    height: 1200
+  }));
 }
