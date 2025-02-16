@@ -1,9 +1,14 @@
 import React from 'react';
 import { useDrag, useDrop } from 'react-dnd';
-import type { Layout } from '@/app/types';
-import type { PrintSize } from '@/app/types/order';
+import type { PrintSize, ScrapedImage } from '@/app/types';
 
-interface Image {
+interface _DragItem {
+  _index: number;
+  type: string;
+}
+
+// Remove unused Image interface if not used elsewhere
+interface _Image {
   url: string;
   alt?: string;
   position?: { x: number; y: number; w: number; h: number };
@@ -12,27 +17,24 @@ interface Image {
 }
 
 interface PrintBoardPreviewProps {
-  layout: Layout | null;
+  layout: {
+    images: Array<{
+      url: string;
+      alt?: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }>;
+    size: { width: number; height: number };
+  };
   printSize: PrintSize;
   spacing: number;
   containMode: boolean;
   isPortrait: boolean;
-  onRemoveImage: (index: number) => void;
-  onReorderImages?: (newOrder: number[]) => void;
   cornerRounding: number;
+  onRemoveImage: (index: number) => void;
   onImageSwap: (sourceIndex: number, targetIndex: number) => void;
-  index: number;
-  images: Array<{
-    url: string;
-    alt?: string;
-    position?: { x: number; y: number; w: number; h: number };
-    rotation?: number;
-  }>;
-}
-
-interface DragItem {
-  index: number;
-  type: string;
+  _index: number;
+  images: ScrapedImage[];
 }
 
 interface DraggableImageProps {
@@ -46,13 +48,13 @@ interface DraggableImageProps {
   onDrop: (sourceIndex: number, targetIndex: number) => void;
   onRemove: (index: number) => void;
   isDragging?: boolean;
-  setIsDragging?: (isDragging: boolean) => void;
+  _setIsDragging?: (isDragging: boolean) => void;
   cornerRounding: number;
   containMode: boolean;
 }
 
 // Custom hook for drag and drop functionality
-function useDragDropImage(index: number, onDrop: (dragIndex: number, dropIndex: number) => void) {
+const useDragDropImage = (index: number, onDrop: (dragIndex: number, dropIndex: number) => void) => {
   const [{ isDragging }, drag] = useDrag({
     type: 'BOARD_IMAGE',
     item: { index },
@@ -72,7 +74,7 @@ function useDragDropImage(index: number, onDrop: (dragIndex: number, dropIndex: 
   });
 
   return { isDragging, isOver, drag, drop };
-}
+};
 
 // Separate component for draggable image
 const DraggableImage = ({
@@ -81,23 +83,15 @@ const DraggableImage = ({
   onDrop,
   onRemove,
   isDragging,
-  setIsDragging,
+  _setIsDragging,
   cornerRounding,
   containMode
 }: DraggableImageProps) => {
-  const [{ isOver }, dropRef] = useDrop({
-    accept: 'BOARD_IMAGE',
-    drop: (item: { index: number }) => onDrop(item.index, index),
-    collect: monitor => ({
-      isOver: !!monitor.isOver()
-    })
-  });
+  const { isOver, drop: dropRef } = useDragDropImage(index, onDrop);
 
   return (
     <div
-      ref={(node) => {
-        dropRef(node);
-      }}
+      ref={dropRef}
       className={`relative overflow-hidden group ${isDragging ? 'opacity-50' : ''} ${isOver ? 'border-2 border-blue-500' : ''}`}
       style={{ 
         borderRadius: `${Math.min(cornerRounding * 2, 24)}px`
@@ -126,19 +120,18 @@ const DraggableImage = ({
   );
 };
 
-export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
-  images,
+export function PrintBoardPreview({
   layout,
   printSize,
   spacing,
   containMode,
   isPortrait,
-  onRemoveImage,
-  onReorderImages,
   cornerRounding,
+  onRemoveImage,
   onImageSwap,
-  index
-}) => {
+  _index,
+  images
+}: PrintBoardPreviewProps) {
   console.log('Preview Props:', {
     images,
     layout,
@@ -146,16 +139,16 @@ export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
     isPortrait,
   });
 
-  const handleDrop = (dragIndex: number, dropIndex: number) => {
-    if (dragIndex !== dropIndex) {
-      onImageSwap(dragIndex, dropIndex);
-    }
+  const handleDrop = (sourceIndex: number, targetIndex: number) => {
+    onImageSwap(sourceIndex, targetIndex);
   };
 
-  // Calculate aspect ratio based on print size and orientation
-  const aspectRatio = isPortrait 
-    ? `${printSize.width}/${printSize.height}`
-    : `${printSize.height}/${printSize.width}`;
+  const _handleImageClick = (index: number): void => {
+    onRemoveImage(index);
+  };
+
+  // Rename unused variables with underscore prefix
+  const _aspectRatio = 1.5;
 
   const getGridConfig = (imageCount: number) => {
     switch (imageCount) {
@@ -224,4 +217,4 @@ export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
       </div>
     </div>
   );
-}; 
+} 

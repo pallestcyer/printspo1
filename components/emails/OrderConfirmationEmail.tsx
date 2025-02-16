@@ -3,7 +3,6 @@ import {
   Body,
   Container,
   Text,
-  Link,
   Preview,
   Section,
   Head,
@@ -147,14 +146,16 @@ const addressText = {
   margin: '0 0 4px',
 };
 
-const footer = {
-  fontSize: '14px',
-  color: '#6b7280',
+const _footer = {
+  color: '#666666',
+  fontFamily: 'sans-serif',
+  fontSize: '12px',
+  lineHeight: '24px',
   textAlign: 'center' as const,
-  marginTop: '32px',
+  margin: '48px 0',
 };
 
-const link = {
-  color: '#2563eb',
+const _link = {
+  color: '#067df7',
   textDecoration: 'none',
 }; 

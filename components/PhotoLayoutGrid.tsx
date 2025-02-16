@@ -1,56 +1,50 @@
 import React, { useState, useRef } from 'react';
-import { Replace } from 'lucide-react';
 import { ImageReplaceModal } from './ImageReplaceModal';
-import type { ScrapedImage } from '@/app/types/index';
+import type { Layout, ScrapedImage } from '@/app/types';
 import type { PrintSize } from '@/app/types/order';
 
 interface PhotoLayoutGridProps {
-  scrapedImages: ScrapedImage[];
-  selectedIndices: number[];
-  onSelectionChange: (indices: number[]) => void;
+  layout: Layout & {
+    selectedIndices: number[];
+    images: ScrapedImage[];
+  };
+  onLayoutChange: (layout: Layout) => void;
+  _onGapChange: (spacing: number) => void;
+  _onLayoutComplete: () => void;
   selectedSize: PrintSize;
   onCheckout: () => Promise<void>;
   gapSpacing: number;
-  onGapChange: (spacing: number) => void;
-  spacing?: number;
-  setSpacing?: (spacing: number) => void;
-  onLayoutComplete?: () => void;
+  _spacing?: number;
+  _setSpacing?: (spacing: number) => void;
   cornerRounding: number;
   onCornerRoundingChange: (rounding: number) => void;
 }
 
-export default function PhotoLayoutGrid({
-  scrapedImages,
-  selectedIndices,
-  onSelectionChange,
+export function PhotoLayoutGrid({
+  layout,
+  onLayoutChange,
+  _onGapChange,
+  _onLayoutComplete,
   selectedSize,
   onCheckout,
   gapSpacing = 16,
-  onGapChange,
-  onLayoutComplete,
+  _spacing,
+  _setSpacing,
   cornerRounding,
   onCornerRoundingChange
 }: PhotoLayoutGridProps) {
-  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [_isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
-    setStartX(e.pageX - (gridRef.current?.offsetLeft || 0));
-    setScrollLeft(gridRef.current?.scrollLeft || 0);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const x = e.pageX - (gridRef.current?.offsetLeft || 0);
-    const walk = (x - startX) * 2;
     if (gridRef.current) {
-      gridRef.current.scrollLeft = scrollLeft - walk;
+      setStartX(e.pageX - gridRef.current.offsetLeft);
+      setScrollLeft(gridRef.current.scrollLeft);
     }
   };
 
@@ -58,23 +52,33 @@ export default function PhotoLayoutGrid({
     setIsDragging(false);
   };
 
-  const handleImageReplace = (index: number) => {
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!_isDragging || !gridRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - gridRef.current.offsetLeft;
+    const walk = (x - startX) * 2;
+    gridRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const _handleImageReplace = (index: number) => {
     setSelectedImageIndex(index);
     setReplaceModalOpen(true);
   };
 
   const handleImageSelect = (newImageIndex: number) => {
     if (selectedImageIndex !== null) {
-      const newIndices = [...selectedIndices];
-      newIndices[selectedImageIndex] = newImageIndex;
-      onSelectionChange(newIndices);
+      const newLayout = { ...layout };
+      newLayout.images[selectedImageIndex] = layout.images[newImageIndex];
+      onLayoutChange(newLayout);
       setReplaceModalOpen(false);
       setSelectedImageIndex(null);
     }
   };
 
-  // Filter out images that are already in the print board
-  const availableImages = scrapedImages.filter((_, index) => !selectedIndices.includes(index));
+  // Filter out images that are already in the layout
+  const availableImages = layout.images.filter((_, index) => 
+    !layout.selectedIndices.includes(index)
+  );
 
   return (
     <div className="space-y-6">
@@ -91,38 +95,40 @@ export default function PhotoLayoutGrid({
             padding: '1rem',
             userSelect: 'none'
           }}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseUp}
         >
-          {availableImages.map((image, filteredIndex) => {
-            const originalIndex = scrapedImages.findIndex(img => img.url === image.url);
-            
-            return (
-              <div
-                key={`${image.url}-${originalIndex}`}
-                className="relative group cursor-pointer"
-                onClick={() => {
-                  if (!isDragging) {
-                    onSelectionChange([...selectedIndices, originalIndex].sort());
-                  }
-                }}
-              >
-                <div className="relative aspect-square overflow-hidden shadow-md" style={{ borderRadius: `${cornerRounding}px` }}>
-                  <img
-                    src={image.url}
-                    alt={image.alt || ''}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    draggable={false}
-                  />
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-20 transition-opacity duration-200" />
-                  
-                  {/* Border highlight on hover */}
-                  <div 
-                    className="absolute inset-0 ring-2 ring-blue-500 ring-opacity-0 group-hover:ring-opacity-50 transition-all duration-200"
-                  />
-                </div>
+          {availableImages.map((image, _filteredIndex) => (
+            <div
+              key={image.url}
+              className="relative group cursor-pointer"
+              onClick={() => {
+                if (!_isDragging) {
+                  const newLayout = { ...layout };
+                  newLayout.selectedIndices = [...layout.selectedIndices, _filteredIndex].sort();
+                  onLayoutChange(newLayout);
+                }
+              }}
+            >
+              <div className="relative aspect-square overflow-hidden shadow-md" style={{ borderRadius: `${cornerRounding}px` }}>
+                <img
+                  src={image.url}
+                  alt={image.alt || ''}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  draggable={false}
+                />
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-20 transition-opacity duration-200" />
+                
+                {/* Border highlight on hover */}
+                <div 
+                  className="absolute inset-0 ring-2 ring-blue-500 ring-opacity-0 group-hover:ring-opacity-50 transition-all duration-200"
+                />
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -139,10 +145,10 @@ export default function PhotoLayoutGrid({
 
       {replaceModalOpen && (
         <ImageReplaceModal
-          scrapedImages={scrapedImages}
+          scrapedImages={layout.images}
+          selectedIndices={layout.selectedIndices}
           onSelect={handleImageSelect}
           onClose={() => setReplaceModalOpen(false)}
-          selectedIndices={selectedIndices}
         />
       )}
 

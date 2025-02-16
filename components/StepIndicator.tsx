@@ -1,46 +1,19 @@
-import { CheckCircle2, Circle } from 'lucide-react';
-import { Step, StepStatus } from '@/app/types/step';
-
 interface StepIndicatorProps {
-  steps?: Step[];
-  currentStep: number;
+  steps: string[];
+  _currentStep: number;
 }
 
-export function StepIndicator({
-  steps = [
-    { 
-      title: 'Upload', 
-      description: 'Upload your images',
-      status: 'complete' as StepStatus
-    },
-    { 
-      title: 'Layout', 
-      description: 'Arrange your layout',
-      status: 'current' as StepStatus
-    },
-    { 
-      title: 'Review', 
-      description: 'Review and checkout',
-      status: 'upcoming' as StepStatus
-    }
-  ],
-  currentStep
-}: StepIndicatorProps) {
+export function StepIndicator({ steps, _currentStep }: StepIndicatorProps) {
   return (
-    <div className="flex justify-between">
-      {steps.map((step, index) => (
-        <div key={step.title} className="flex flex-col items-center">
-          <div className="flex items-center">
-            {step.status === 'complete' ? (
-              <CheckCircle2 className="w-6 h-6 text-green-500" />
-            ) : (
-              <Circle className={`w-6 h-6 ${step.status === 'current' ? 'text-blue-500' : 'text-gray-300'}`} />
-            )}
+    <div className="flex items-center justify-center space-x-4">
+      {steps.map((step, _index) => (
+        <div key={step} className="flex items-center">
+          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+            {step}
           </div>
-          <div className="mt-2 text-center">
-            <div className="text-sm font-medium">{step.title}</div>
-            <div className="text-xs text-gray-500">{step.description}</div>
-          </div>
+          {_index < steps.length - 1 && (
+            <div className="w-16 h-0.5 bg-gray-200 mx-2" />
+          )}
         </div>
       ))}
     </div>

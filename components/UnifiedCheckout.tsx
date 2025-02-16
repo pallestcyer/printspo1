@@ -3,6 +3,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { PrintBoardPreview } from './PrintBoardPreview';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import type { PrintSize } from '@/app/types/order';
+import { PRINT_SIZES } from '@/lib/constants';
 
 interface UnifiedCheckoutProps {
   layout: {
@@ -26,12 +27,14 @@ export function UnifiedCheckout({
   containMode,
   onSuccess, 
   onError 
-}: UnifiedCheckoutProps) {
+}: UnifiedCheckoutProps): JSX.Element {
   const [loading, setLoading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [printFile, setPrintFile] = useState<string | null>(null);
+  const [_previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [_printFile, setPrintFile] = useState<string | null>(null);
 
-  const generatePrintFile = async (isPreview = false) => {
+  const generatePrintFile = async (isPreview = false): Promise<{
+    images: Array<{ printUrl: string; previewUrl: string }>;
+  } | null> => {
     try {
       setLoading(true);
       
@@ -53,7 +56,6 @@ export function UnifiedCheckout({
       }
       
       const data = await response.json();
-      console.log('Generate response:', data);
       
       if (isPreview) {
         setPreviewUrl(data.images[0].previewUrl);
@@ -62,8 +64,8 @@ export function UnifiedCheckout({
         setPrintFile(data.images[0].printUrl);
       }
       return data;
-    } catch (error) {
-      console.error('Generate print file error:', error);
+    } catch (_error) {
+      console.error('Generate print file error:', _error);
       onError('Failed to generate print file');
       return null;
     } finally {
@@ -71,28 +73,25 @@ export function UnifiedCheckout({
     }
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (): Promise<void> => {
     try {
       setLoading(true);
       
-      // Generate high-res print file first
       const printData = await generatePrintFile(false);
       if (!printData) {
         throw new Error('Failed to generate print file');
       }
 
-      // Assuming you have the size defined somewhere
       const layoutWithSize = {
         images: layout.images,
-        size: { width: printSize.width, height: printSize.height } // Add the size property
+        size: { width: printSize.width, height: printSize.height }
       };
 
-      // Create order and get Stripe session
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          layout: layoutWithSize, // Pass the updated layout
+          layout: layoutWithSize,
           printSize,
           spacing,
           printFile: printData.images[0].printUrl,
@@ -112,7 +111,6 @@ export function UnifiedCheckout({
         throw new Error('Failed to load payment processor');
       }
 
-      // Redirect to Stripe checkout
       const { error } = await stripe.redirectToCheckout({ sessionId });
       if (error) {
         throw error;
@@ -137,17 +135,17 @@ export function UnifiedCheckout({
             height: printSize.height
           }
         }}
-        printSize={{
-          ...printSize,
-          name: `${printSize.width}x${printSize.height}`
-        }}
+        printSize={PRINT_SIZES.find(size => 
+          size.width === printSize.width && 
+          size.height === printSize.height
+        ) || PRINT_SIZES[0]}
         spacing={spacing}
         containMode={containMode}
         isPortrait={printSize.height > printSize.width}
         cornerRounding={0}
         onRemoveImage={() => {}}
         onImageSwap={() => {}}
-        index={0}
+        _index={0}
         images={layout.images}
       />
       

@@ -4,7 +4,7 @@ import { MultiBoardPreview } from '@/components/MultiBoardPreview';
 import Image from 'next/image';
 import DragDropProvider from '@/components/DndProvider';
 import { PRINT_SIZES } from '@/lib/constants';
-import type { Board, BoardsState } from '@/app/types';
+import type { BoardsState } from '@/app/types';
 
 export default function Home() {
   const [isMultiMode, setIsMultiMode] = useState(false);
@@ -69,8 +69,8 @@ export default function Home() {
               <MultiBoardPreview 
                 isMultiMode={isMultiMode}
                 onMultiModeChange={setIsMultiMode}
-                selectedBoards={boards}
-                onBoardsChange={setBoards}
+                _selectedBoards={boards}
+                _onBoardsChange={setBoards}
               />
             </div>
           </DragDropProvider>

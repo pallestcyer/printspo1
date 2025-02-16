@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
+import { kv } from '@vercel/kv';
 import Stripe from 'stripe';
 import crypto from 'crypto';
-import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type Order, type OrderStatus, type Layout, type PrintSize } from '@/app/types/order';
+import type { Order, OrderStatus, Layout, PrintSize } from '@/app/types/order';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
-  typescript: true,
 });
 
-interface CreatePaymentIntentRequest {
+interface _CreatePaymentIntentRequest {
   layout: Layout;
   printSize: PrintSize;
   spacing?: number;

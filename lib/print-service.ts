@@ -1,6 +1,5 @@
-import { getPrintSizeVariantId } from './stripe-helpers';
 import { kv } from '@vercel/kv';
-import type { PrintJob, Order, PrintSize } from '@/app/types/order';
+import type { PrintJob, PrintSize } from '@/app/types/order';
 
 export async function createPrintJob({
   orderId,
@@ -36,4 +35,12 @@ export async function createPrintJob({
     console.error('Print job creation error:', error);
     throw error;
   }
-} 
+}
+
+export const generatePrintFile = async () => {
+  // Implementation
+};
+
+export const optimizeImage = async () => {
+  // Implementation
+}; 

@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
-
-interface Image {
-  url: string;
-  alt: string;
-}
+import { ScrapedImage } from '@/app/types';
 
 const PinterestGrid = () => {
   const [url, setUrl] = useState('');
-  const [images, setImages] = useState<Image[]>([]);
+  const [images, setImages] = useState<ScrapedImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 

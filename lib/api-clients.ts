@@ -1,6 +1,5 @@
 import Stripe from 'stripe';
 import { Resend } from 'resend';
-import { config } from './config';
 
 // Initialize Stripe
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {

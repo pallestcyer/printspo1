@@ -1,4 +1,4 @@
-import type { PrintSize as ImportedPrintSize } from '@/app/types/order';
+import type { PrintSize } from '@/app/types';
 
 export const PRINT_SIZES = [
   { width: 5, height: 7, price: 9, name: '5x7' },
@@ -13,6 +13,4 @@ export type PrintSizeKey = keyof typeof PRINT_SIZES;
 export const PATHS = {
   types: '@/app/types/index',
   orders: '@/app/types/order',
-} as const;
-
-export type PrintSize = typeof PRINT_SIZES[number]; 
+} as const; 

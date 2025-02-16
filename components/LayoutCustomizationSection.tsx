@@ -1,48 +1,47 @@
-import { theme } from '@/components/ui/theme';
-import PhotoLayoutGrid from '@/components/PhotoLayoutGrid';
+import { PRINT_SIZES } from '@/lib/constants';
 import { PrintSizeSelector } from '@/components/PrintSizeSelector';
 import { GapControl } from '@/components/GapControl';
-import type { PrintSize } from '@/app/types/order';
-import type { ScrapedImage } from '@/app/types/index';
-import { PRINT_SIZES } from '@/lib/constants';
+import type { Layout } from '@/app/types';
 
 // Maximum number of images supported by any layout
-const MAX_IMAGES = 4; // Based on the maximum from available layouts
+const _MAX_IMAGES = 12;
+
+// Extend Layout type to include the additional properties needed
+interface ExtendedLayout extends Layout {
+  containMode: boolean;
+  isPortrait: boolean;
+}
 
 interface LayoutCustomizationSectionProps {
-  selectedImages: ScrapedImage[];
-  selectedSize: PrintSize;
-  spacing: number;
-  onSpacingChange: (spacing: number) => void;
-  onSizeChange: (size: PrintSize) => void;
-  onLayoutComplete: () => void;
-  gapSpacing: number;
-  onGapChange: (spacing: number) => void;
-  onCheckout: () => Promise<void>;
-  containMode: boolean;
-  setContainMode: (mode: boolean) => void;
-  isPortrait: boolean;
-  setIsPortrait: (isPortrait: boolean) => void;
+  layout: ExtendedLayout;
+  onLayoutChange: (layout: ExtendedLayout) => void;
+  _onLayoutComplete: () => void;
+  _gapSpacing: number;
+  _onGapChange: (spacing: number) => void;
+  _onCheckout: () => void;
 }
 
 export const LayoutCustomizationSection = ({
-  selectedImages,
-  selectedSize,
-  spacing,
-  onSpacingChange,
-  onSizeChange,
-  onLayoutComplete,
-  gapSpacing,
-  onGapChange,
-  onCheckout,
-  containMode,
-  setContainMode,
-  isPortrait,
-  setIsPortrait
+  layout,
+  onLayoutChange,
+  _onLayoutComplete,
+  _gapSpacing,
+  _onGapChange,
+  _onCheckout
 }: LayoutCustomizationSectionProps) => {
   const calculateGridColumns = () => {
-    const aspectRatio = selectedSize.width / selectedSize.height;
+    const width = layout.size?.width ?? 1;
+    const height = layout.size?.height ?? 1;
+    const aspectRatio = width / height;
     return aspectRatio >= 1 ? 2 : 1;
+  };
+
+  // Create a PrintSize object from layout for PrintSizeSelector
+  const layoutAsPrintSize = {
+    width: layout.size?.width ?? PRINT_SIZES[0].width,
+    height: layout.size?.height ?? PRINT_SIZES[0].height,
+    price: 0,
+    name: `${layout.size?.width ?? PRINT_SIZES[0].width}x${layout.size?.height ?? PRINT_SIZES[0].height}`
   };
 
   return (
@@ -57,36 +56,36 @@ export const LayoutCustomizationSection = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
               <PrintSizeSelector
                 sizes={PRINT_SIZES}
-                selectedSize={selectedSize}
-                onSizeChange={onSizeChange}
+                selectedSize={layoutAsPrintSize}
+                onSizeChange={(size) => onLayoutChange({ ...layout, size: { width: size.width, height: size.height } })}
               />
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto border-l pl-4">
                 <GapControl
-                  value={spacing}
-                  onChange={onSpacingChange}
+                  value={_gapSpacing}
+                  onChange={_onGapChange}
                   label="Image spacing"
-                  containMode={containMode}
-                  onContainModeChange={setContainMode}
-                  isPortrait={isPortrait}
-                  onOrientationChange={setIsPortrait}
+                  containMode={layout.containMode}
+                  onContainModeChange={(mode) => onLayoutChange({ ...layout, containMode: mode })}
+                  isPortrait={layout.isPortrait}
+                  onOrientationChange={(isPortrait) => onLayoutChange({ ...layout, isPortrait })}
                 />
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={containMode}
-                      onChange={(e) => setContainMode(e.target.checked)}
+                      checked={layout.containMode}
+                      onChange={(e) => onLayoutChange({ ...layout, containMode: e.target.checked })}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="text-sm text-gray-700">Show full images</span>
                   </label>
                   
                   <button
-                    onClick={() => setIsPortrait(!isPortrait)}
+                    onClick={() => onLayoutChange({ ...layout, isPortrait: !layout.isPortrait })}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm"
                     style={{
-                      backgroundColor: isPortrait ? 'rgba(212, 165, 165, 0.5)' : '#F7F7F7',
-                      borderColor: isPortrait ? '#D4A5A5' : '#E5E7EB',
+                      backgroundColor: layout.isPortrait ? 'rgba(212, 165, 165, 0.5)' : '#F7F7F7',
+                      borderColor: layout.isPortrait ? '#D4A5A5' : '#E5E7EB',
                       color: '#4D4D4D'
                     }}
                   >
@@ -96,7 +95,7 @@ export const LayoutCustomizationSection = ({
                       fill="none" 
                       stroke="currentColor"
                     >
-                      {isPortrait ? (
+                      {layout.isPortrait ? (
                         <rect x="8" y="4" width="8" height="16" rx="1" strokeWidth="2" />
                       ) : (
                         <rect x="4" y="8" width="16" height="8" rx="1" strokeWidth="2" />
@@ -112,16 +111,16 @@ export const LayoutCustomizationSection = ({
           <div className="relative w-full mx-auto" 
             style={{ 
               maxWidth: 'min(800px, 90vw)',
-              aspectRatio: `${selectedSize.width}/${selectedSize.height}`,
+              aspectRatio: `${layout.size?.width ?? PRINT_SIZES[0].width}/${layout.size?.height ?? PRINT_SIZES[0].height}`,
               display: 'grid',
               gridTemplateColumns: `repeat(${calculateGridColumns()}, 1fr)`,
-              gap: `${spacing}rem`,
+              gap: `${_gapSpacing}rem`,
               padding: '1rem',
               backgroundColor: '#f8f9fa',
               borderRadius: '0.5rem'
             }}
           >
-            {selectedImages.map((image, index) => (
+            {layout.images.map((image, index) => (
               <div
                 key={index}
                 className="relative aspect-square overflow-hidden rounded-lg shadow-md"

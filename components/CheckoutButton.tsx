@@ -20,7 +20,7 @@ interface CheckoutButtonProps {
   disabled?: boolean;
 }
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const _stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const CheckoutButton: React.FC<CheckoutButtonProps> = ({ 
   layoutData, 

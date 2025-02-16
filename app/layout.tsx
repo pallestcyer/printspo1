@@ -1,28 +1,24 @@
 import './globals.css'
 import { Inter, Taviraj } from 'next/font/google'
-import { Metadata } from 'next'
-import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import type { Metadata } from 'next'
 
 const inter = Inter({
   subsets: ['latin'],
-  display: 'swap',
   variable: '--font-inter',
+  display: 'swap',
 });
 
 const taviraj = Taviraj({
+  weight: ['100', '200', '300', '400', '500', '600', '700'],
   subsets: ['latin'],
-  display: 'swap',
   variable: '--font-taviraj',
-  weight: ['100', '200', '300', '400', '500', '600', '700', '800'],
-  style: ['normal', 'italic'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'Printspo - Pins to Prints',
-  description: 'Create beautiful custom prints from your favorite images.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'),
-}
+  title: 'Printspo - Turn Pinterest Boards into High-Quality Prints',
+  description: 'Create beautiful prints from your Pinterest boards instantly. Perfect for mood boards, presentations, and inspiration walls.',
+};
 
 export default function RootLayout({
   children,
@@ -31,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${taviraj.variable}`}>
-      <body className={inter.className}>{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

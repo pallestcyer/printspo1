@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: Request) {
   return NextResponse.json({ message: 'Hello from the API!' });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: Request) {
   return NextResponse.json({ message: 'Email sent successfully!' });
 } 

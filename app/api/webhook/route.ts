@@ -37,7 +37,11 @@ export async function POST(request: Request) {
         throw new Error('Missing success_url in session');
       }
 
-      const orderId = session.success_url.split('order=')[1];
+      const orderId = session?.metadata?.orderId;
+      if (!orderId) {
+        console.error('No order ID found in session metadata');
+        return new Response('No order ID found', { status: 400 });
+      }
       
       // Get order details from KV store
       const order = await kv.get(`order:${orderId}`) as Order;
@@ -63,7 +67,7 @@ export async function POST(request: Request) {
       // Send confirmation email using sendEmail
       await resend.sendEmail({
         from: 'Printspo <orders@printspo.ca>',
-        to: session.customer_details?.email!,
+        to: session.customer_details?.email || 'support@printspo.ca',
         subject: `Order Confirmed - ${orderId}`,
         react: OrderConfirmationEmail({
           orderId,

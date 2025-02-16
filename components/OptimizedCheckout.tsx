@@ -1,11 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { 
-  loadStripe, 
-  StripeElementsOptions,
-  PaymentIntent as StripePaymentIntent
-} from '@stripe/stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import { 
   Elements, 
   PaymentElement, 
@@ -15,21 +11,34 @@ import {
 } from '@stripe/react-stripe-js';
 import { Loader2 } from 'lucide-react';
 import { PrintBoardPreview } from './PrintBoardPreview';
-import type { PrintSize, Layout, Order } from '@/app/types/order'; // Importing PrintSize and Layout
+import type { PrintSize } from '@/app/types';
 
 interface OptimizedCheckoutProps {
   printSize: PrintSize;
-  layout: Layout;
+  layout: {
+    images: Array<{
+      url: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }>;
+  };
   onSuccess: (orderId: string) => void;
-  onError: (error: string) => void;
+  onError: (message: string) => void;
 }
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: OptimizedCheckoutProps) {
+export function OptimizedCheckout({ 
+  printSize, 
+  layout, 
+  onSuccess, 
+  onError 
+}: OptimizedCheckoutProps): JSX.Element {
   const [loading, setLoading] = useState(false);
+  const [_previewUrl, _setPreviewUrl] = useState<string | null>(null);
+  const [_printFile, _setPrintFile] = useState<string | null>(null);
+  const [spacing] = useState<number>(0);
   const [clientSecret, setClientSecret] = useState<string>();
-  const [spacing, setSpacing] = useState<number>(0); // Assuming spacing is needed
   const stripe = useStripe();
   const elements = useElements();
 
@@ -49,15 +58,15 @@ export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: Opt
       const { clientSecret, orderId } = await response.json();
       setClientSecret(clientSecret);
       return orderId;
-    } catch (error) {
+    } catch (_error) {
       onError('Failed to initialize payment');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async () => {
-    if (!stripe || !elements || !clientSecret) {
+  const handleSubmit = async (): Promise<void> => {
+    if (!stripe || !elements) {
       return;
     }
 
@@ -87,14 +96,15 @@ export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: Opt
       } else {
         onError('Payment status unclear. Please check your order status.');
       }
-    } catch (error) {
-      onError(error instanceof Error ? error.message : 'Payment failed');
+    } catch (_error) {
+      console.error('Checkout error:', _error);
+      onError(_error instanceof Error ? _error.message : 'Failed to process checkout');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!clientSecret) {
+  if (!stripe) {
     return (
       <button 
         onClick={initializePayment}
@@ -130,7 +140,7 @@ export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: Opt
           cornerRounding={0}
           onRemoveImage={() => {}}
           onImageSwap={() => {}}
-          index={0}
+          _index={0}
           images={layout.images}
         />
         <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -140,7 +150,7 @@ export function OptimizedCheckout({ printSize, layout, onSuccess, onError }: Opt
             layout: 'tabs'
           }} />
           <button 
-            onClick={handleSubmit} // Call the handleSubmit function
+            onClick={handleSubmit}
             className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
           >
             Complete Purchase

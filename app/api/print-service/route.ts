@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import { ORDER_STATUS, type PrintJob, type Order, type PrintSize } from '@/app/types/order';
 
-interface OrderData {
+interface _OrderData {
   orderId: string;
   printFile: string;
   printSize: PrintSize;

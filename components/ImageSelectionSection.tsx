@@ -1,18 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
-import type { ScrapedImage } from '@/app/types/index';
 
 interface ImageSelectionSectionProps {
   images: any[];
   selectedIndices: number[];
   onSelect: (index: number) => void;
-  onRemove: (index: number) => void;
-  isMultiBoard: boolean;
-  boardIndex: number;
+  _onRemove: (index: number) => void;
+  _isMultiBoard: boolean;
+  _boardIndex: number;
 }
 
-export function ImageSelectionSection({ images, selectedIndices, onSelect, onRemove, isMultiBoard, boardIndex }: ImageSelectionSectionProps) {
+export function ImageSelectionSection({
+  images,
+  selectedIndices,
+  onSelect,
+  _onRemove,
+  _isMultiBoard,
+  _boardIndex,
+}: ImageSelectionSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
@@ -91,6 +97,10 @@ export function ImageSelectionSection({ images, selectedIndices, onSelect, onRem
   // Filter out already selected images
   const availableImages = images.filter((_, index) => !selectedIndices.includes(index));
 
+  const _handleImageClick = (_filteredIndex: number) => {
+    // Unused function
+  };
+
   return (
     <div className="relative w-full max-w-full overflow-hidden">
       {showLeftArrow && (
@@ -133,7 +143,7 @@ export function ImageSelectionSection({ images, selectedIndices, onSelect, onRem
           flexWrap: 'nowrap'
         }}
       >
-        {availableImages.map((image, filteredIndex) => {
+        {availableImages.map((image, _filteredIndex) => {
           // Find the original index in the full images array
           const originalIndex = images.findIndex(img => img.url === image.url);
           

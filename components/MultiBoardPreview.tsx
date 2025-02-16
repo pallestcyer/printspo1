@@ -1,51 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Dispatch, SetStateAction } from 'react';
 import { Plus, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { PrintBoardPreview } from './PrintBoardPreview';
 import { ImageSelectionSection } from './ImageSelectionSection';
 import { PRINT_SIZES } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
-import Image from 'next/image';
-import { type PrintSize as ImportedPrintSize, type Board as ImportedBoard, type ScrapedImage } from '@/app/types';
+import _Image from 'next/image';
+import { type Board } from '@/app/types';
 import { cn } from '@/lib/utils';
-
-interface LocalPrintSize {
-  width: number;
-  height: number;
-  price: number;
-  name: string;
-}
 
 interface MultiBoardPreviewProps {
   isMultiMode: boolean;
-  onMultiModeChange: (isMulti: boolean) => void;
-  selectedBoards: ImportedBoard[];
-  onBoardsChange: (boards: ImportedBoard[]) => void;
+  onMultiModeChange: Dispatch<SetStateAction<boolean>>;
+  _selectedBoards: Board[];
+  _onBoardsChange: Dispatch<SetStateAction<Board[]>>;
   className?: string;
-}
-
-interface Image {
-  url: string;
-  alt?: string;
-  // Add other properties as needed
-}
-
-interface Board {
-  id: string;
-  url: string;
-  name: string;
-  scrapedImages: ScrapedImage[];
-  selectedIndices: number[];
-  printSize: {
-    width: number;
-    height: number;
-    price: number;
-    name: string;
-  };
-  spacing: number;
-  containMode: boolean;
-  isPortrait: boolean;
-  cornerRounding: number;
 }
 
 interface LoadingStates {
@@ -56,11 +25,16 @@ interface ErrorStates {
   [key: string]: string | null;
 }
 
+interface _DragItem {
+  index: number;
+  type: string;
+}
+
 const calculateOrderTotal = (boards: Board[]) => {
   return boards.reduce((total, board) => total + board.printSize.price, 0);
 };
 
-const generatePreview = async (board: Board) => {
+const _generatePreview = async (board: Board) => {
   try {
     const response = await fetch('/api/prints/generate', {
       method: 'POST',
@@ -99,12 +73,12 @@ const generatePreview = async (board: Board) => {
 export function MultiBoardPreview({ 
   isMultiMode,
   onMultiModeChange,
-  selectedBoards,
-  onBoardsChange,
+  _selectedBoards,
+  _onBoardsChange,
   className 
 }: MultiBoardPreviewProps) {
-  const router = useRouter();
-  const [boards, setBoards] = useState<Board[]>([{
+  const _router = useRouter();
+  const [_boards, setBoards] = useState<Board[]>([{
     id: Date.now().toString(),
     url: '',
     name: '',
@@ -116,23 +90,23 @@ export function MultiBoardPreview({
     isPortrait: true,
     cornerRounding: 0
   }]);
-  const [activeBoardIndex, setActiveBoardIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<ErrorStates>({});
-  const [error, setError] = useState<string | null>(null);
-  const [loadingStates, setLoadingStates] = useState<LoadingStates>({});
-  const [isReturningFromCheckout, setIsReturningFromCheckout] = useState(false);
+  const [_activeBoardIndex, setActiveBoardIndex] = useState(0);
+  const [_loading, setLoading] = useState(false);
+  const [_errors, setErrors] = useState<ErrorStates>({});
+  const [_error, setError] = useState<string | null>(null);
+  const [_loadingStates, setLoadingStates] = useState<LoadingStates>({});
+  const [_isReturningFromCheckout, _setIsReturningFromCheckout] = useState(false);
 
   // Add missing state variables for drag functionality
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const [_isDragging, setIsDragging] = useState(false);
+  const [_startX, setStartX] = useState(0);
+  const [_scrollLeft, setScrollLeft] = useState(0);
+  const _gridRef = useRef<HTMLDivElement>(null);
 
   // Save boards state to localStorage whenever it changes
   useEffect(() => {
-    saveToLocalStorage(boards);
-  }, [boards]);
+    saveToLocalStorage(_boards);
+  }, [_boards]);
 
   // Load boards from localStorage on initial mount
   useEffect(() => {
@@ -171,10 +145,10 @@ export function MultiBoardPreview({
 
   // Validate active board index whenever boards array changes
   useEffect(() => {
-    if (activeBoardIndex >= boards.length) {
-      setActiveBoardIndex(Math.max(0, boards.length - 1));
+    if (_activeBoardIndex >= _boards.length) {
+      setActiveBoardIndex(Math.max(0, _boards.length - 1));
     }
-  }, [boards.length, activeBoardIndex]);
+  }, [_boards.length, _activeBoardIndex]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -182,9 +156,9 @@ export function MultiBoardPreview({
       
       // Only handle orientation changes
       if (isMobile && window.innerHeight > window.innerWidth) {
-        boards.forEach(board => {
+        _boards.forEach(board => {
           if (!board.isPortrait) {
-            const newBoards = [...boards];
+            const newBoards = [..._boards];
             board.isPortrait = true;
             setBoards(newBoards);
           }
@@ -194,15 +168,15 @@ export function MultiBoardPreview({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [boards]);
+  }, [_boards]);
 
   const hasAnyScrapedImages = (boards: Board[]) => {
     return boards.some(board => board.scrapedImages.length > 0);
   };
 
-  const validateBoard = (board: Board): string | null => {
+  const _validateBoard = (board: Board): string | null => {
     // Only check for duplicate URLs during import
-    const isDuplicate = boards.some(
+    const isDuplicate = _boards.some(
       existingBoard => 
         existingBoard.id !== board.id && 
         existingBoard.url === board.url
@@ -221,7 +195,7 @@ export function MultiBoardPreview({
   };
 
   const handleBoardImport = async (url: string, boardIndex: number) => {
-    const board = boards[boardIndex];
+    const board = _boards[boardIndex];
     
     try {
       if (!url.trim()) {
@@ -315,18 +289,18 @@ export function MultiBoardPreview({
     // Clear any stale selections when switching boards
     setBoards(prevBoards => {
       const newBoards = [...prevBoards];
-      newBoards[activeBoardIndex] = {
-        ...newBoards[activeBoardIndex],
-        selectedIndices: [...newBoards[activeBoardIndex].selectedIndices] // Create fresh array
+      newBoards[_activeBoardIndex] = {
+        ...newBoards[_activeBoardIndex],
+        selectedIndices: [...newBoards[_activeBoardIndex].selectedIndices] // Create fresh array
       };
       return newBoards;
     });
-  }, [activeBoardIndex]);
+  }, [_activeBoardIndex]);
 
   const handleRemoveBoard = (index: number) => {
-    if (boards.length > 1) {
+    if (_boards.length > 1) {
       setBoards(prevBoards => prevBoards.filter((_, i) => i !== index));
-      if (activeBoardIndex >= boards.length - 1) {
+      if (_activeBoardIndex >= _boards.length - 1) {
         setActiveBoardIndex(prev => Math.max(0, prev - 1)); // Adjust active index if needed
       }
     }
@@ -335,7 +309,7 @@ export function MultiBoardPreview({
   const handleCheckout = async () => {
     try {
       // Validate that we have boards with selected images
-      const validBoards = boards.filter(board => board.selectedIndices.length > 0);
+      const validBoards = _boards.filter(board => board.selectedIndices.length > 0);
       if (validBoards.length === 0) {
         setError('Please select at least one image before checkout');
         return;
@@ -392,8 +366,8 @@ export function MultiBoardPreview({
     }
   };
 
-  const handlePreviewDownload = async () => {
-    const board = boards[activeBoardIndex];
+  const _handlePreviewDownload = async () => {
+    const board = _boards[_activeBoardIndex];
     try {
       setLoading(true);
       const response = await fetch('/api/prints/generate', {
@@ -446,8 +420,8 @@ export function MultiBoardPreview({
     }
   };
 
-  const handleReorderImages = (boardIndex: number, newOrder: number[]) => {
-    const newBoards = [...boards];
+  const _handleReorderImages = (boardIndex: number, newOrder: number[]) => {
+    const newBoards = [..._boards];
     const board = newBoards[boardIndex];
     
     // Reorder the selectedIndices array based on the new order
@@ -455,13 +429,13 @@ export function MultiBoardPreview({
     setBoards(newBoards);
   };
 
-  const handleBoardSelect = (index: number) => {
-    if (index >= 0 && index < boards.length) {
+  const _handleBoardSelect = (index: number) => {
+    if (index >= 0 && index < _boards.length) {
       setActiveBoardIndex(index);
     }
   };
 
-  const handleBoardDelete = (indexToDelete: number) => {
+  const _handleBoardDelete = (indexToDelete: number) => {
     setBoards(prevBoards => {
       const newBoards = prevBoards.filter((_, index) => index !== indexToDelete);
       if (newBoards.length === 0) {
@@ -483,12 +457,12 @@ export function MultiBoardPreview({
     });
     
     // Adjust active index if necessary
-    if (indexToDelete <= activeBoardIndex) {
+    if (indexToDelete <= _activeBoardIndex) {
       setActiveBoardIndex(prev => Math.max(0, prev - 1));
     }
   };
 
-  const generateBoardPrintFile = async (board: Board, retries = 2) => {
+  const _generateBoardPrintFile = async (board: Board, retries = 2) => {
     for (let i = 0; i <= retries; i++) {
       try {
         const response = await fetch('/api/prints/generate', {
@@ -561,7 +535,7 @@ export function MultiBoardPreview({
     return () => document.removeEventListener('touchstart', handleTouchStart);
   }, []);
 
-  const loadBoardImages = async (board: Board) => {
+  const _loadBoardImages = async (board: Board) => {
     const loadedImages = await Promise.all(
       board.scrapedImages.map(async (img) => {
         try {
@@ -585,15 +559,15 @@ export function MultiBoardPreview({
       })
     );
 
-    const newBoards = [...boards];
-    newBoards[activeBoardIndex].scrapedImages = loadedImages;
+    const newBoards = [..._boards];
+    newBoards[_activeBoardIndex].scrapedImages = loadedImages;
     setBoards(newBoards);
   };
 
   const handleImageSwap = (sourceIndex: number, targetIndex: number) => {
     setBoards(prevBoards => {
       const newBoards = [...prevBoards];
-      const currentBoard = {...newBoards[activeBoardIndex]};
+      const currentBoard = {...newBoards[_activeBoardIndex]};
       
       // Swap the indices
       const newSelectedIndices = [...currentBoard.selectedIndices];
@@ -601,40 +575,40 @@ export function MultiBoardPreview({
       [newSelectedIndices[targetIndex], newSelectedIndices[sourceIndex]];
       
       currentBoard.selectedIndices = newSelectedIndices;
-      newBoards[activeBoardIndex] = currentBoard;
+      newBoards[_activeBoardIndex] = currentBoard;
       
       return newBoards;
     });
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const _handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
-    setStartX(e.pageX - (gridRef.current?.offsetLeft || 0));
-    setScrollLeft(gridRef.current?.scrollLeft || 0);
+    setStartX(e.pageX - (_gridRef.current?.offsetLeft || 0));
+    setScrollLeft(_gridRef.current?.scrollLeft || 0);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+  const _handleMouseMove = (e: React.MouseEvent) => {
+    if (!_isDragging) return;
     e.preventDefault();
-    const x = e.pageX - (gridRef.current?.offsetLeft || 0);
-    const walk = (x - startX) * 2;
-    if (gridRef.current) {
-      gridRef.current.scrollLeft = scrollLeft - walk;
+    const x = e.pageX - (_gridRef.current?.offsetLeft || 0);
+    const walk = (x - _startX) * 2;
+    if (_gridRef.current) {
+      _gridRef.current.scrollLeft = _scrollLeft - walk;
     }
   };
 
-  const handleMouseUp = () => {
+  const _handleMouseUp = () => {
     setIsDragging(false);
   };
 
-  const handleMouseLeave = () => {
+  const _handleMouseLeave = () => {
     setIsDragging(false);
   };
 
   const handleImageSelect = (index: number) => {
     setBoards(prevBoards => {
       const newBoards = [...prevBoards];
-      const currentBoard = {...newBoards[activeBoardIndex]};
+      const currentBoard = {...newBoards[_activeBoardIndex]};
       
       // Clear any invalid indices that might be stuck
       currentBoard.selectedIndices = currentBoard.selectedIndices.filter(
@@ -646,21 +620,21 @@ export function MultiBoardPreview({
         currentBoard.selectedIndices.push(index);
       }
       
-      newBoards[activeBoardIndex] = currentBoard;
+      newBoards[_activeBoardIndex] = currentBoard;
       return newBoards;
     });
   };
 
   const handleImageRemove = (boardIndex: number, imageIndex: number) => {
-    const newBoards = [...boards];
+    const newBoards = [..._boards];
     newBoards[boardIndex].selectedIndices = newBoards[boardIndex].selectedIndices.filter(
       (_, i) => i !== imageIndex
     );
     setBoards(newBoards);
   };
 
-  const handleAddBoard = () => {
-    const newBoards = [...boards];
+  const _handleAddBoard = () => {
+    const newBoards = [..._boards];
     newBoards.push({
       id: Date.now().toString(),
       url: '',
@@ -677,17 +651,10 @@ export function MultiBoardPreview({
     setActiveBoardIndex(newBoards.length - 1);
   };
 
-  const myPrintSize: LocalPrintSize = {
-    width: 8.5,
-    height: 11,
-    price: 6,
-    name: "8.5x11"
-  };
-
   const FREE_SHIPPING_THRESHOLD = 59;
 
-  const orderTotal = calculateOrderTotal(boards);
-  const amountToFreeShipping = FREE_SHIPPING_THRESHOLD - orderTotal;
+  const orderTotal = calculateOrderTotal(_boards);
+  const _amountToFreeShipping = FREE_SHIPPING_THRESHOLD - orderTotal;
 
   return (
     <main className={cn('min-h-screen', className)}>
@@ -725,7 +692,7 @@ export function MultiBoardPreview({
 
           {/* URL inputs */}
           <div className="space-y-4">
-            {boards.map((board, index) => (
+            {_boards.map((board, index) => (
               <div key={board.id} className="space-y-2">
                 <div className="relative flex items-center gap-2">
                   <input
@@ -733,13 +700,13 @@ export function MultiBoardPreview({
                     placeholder="Paste your Pinterest board URL"
                     value={board.url}
                     onChange={(e) => {
-                      const newBoards = [...boards];
+                      const newBoards = [..._boards];
                       newBoards[index].url = e.target.value;
                       setBoards(newBoards);
                     }}
                     className="flex-1 p-2 border rounded-lg focus:border-[#D4A5A5] focus:outline-none transition-colors"
                   />
-                  {boards.length > 1 && (
+                  {_boards.length > 1 && (
                     <button
                       onClick={() => handleRemoveBoard(index)}
                       className="p-2 text-[#D4A5A5] hover:text-[#b38989] transition-colors"
@@ -753,23 +720,23 @@ export function MultiBoardPreview({
                     className="px-6 py-2.5 bg-[#D4A5A5] hover:bg-[#b38989] text-white rounded-lg font-light transition-all duration-200 flex items-center gap-2"
                   >
                     <span>Import Board</span>
-                    {loadingStates[board.id] !== undefined && loadingStates[board.id] !== -1 && (
+                    {_loadingStates[board.id] !== undefined && _loadingStates[board.id] !== -1 && (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     )}
                   </button>
                 </div>
                 {/* Loading Progress Bar */}
-                {loadingStates[board.id] !== undefined && loadingStates[board.id] !== -1 && (
+                {_loadingStates[board.id] !== undefined && _loadingStates[board.id] !== -1 && (
                   <div className="h-1 bg-gray-200 rounded overflow-hidden">
                     <div 
                       className="h-full bg-[#D4A5A5] transition-all duration-300"
-                      style={{ width: `${loadingStates[board.id]}%` }}
+                      style={{ width: `${_loadingStates[board.id]}%` }}
                     />
                   </div>
                 )}
                 {/* Board-specific error messages */}
-                {errors[board.id] && (
-                  <p className="text-sm text-[#D4A5A5] mt-2">{errors[board.id]}</p>
+                {_errors[board.id] && (
+                  <p className="text-sm text-[#D4A5A5] mt-2">{_errors[board.id]}</p>
                 )}
               </div>
             ))}
@@ -777,7 +744,7 @@ export function MultiBoardPreview({
 
           {isMultiMode && (
             <button
-              onClick={() => setBoards([...boards, {
+              onClick={() => setBoards([..._boards, {
                 id: Date.now().toString(),
                 url: '',
                 name: '',
@@ -798,21 +765,21 @@ export function MultiBoardPreview({
         </div>
 
         {/* Board Navigation */}
-        {isMultiMode && boards.length > 1 && hasAnyScrapedImages(boards) && (
+        {isMultiMode && _boards.length > 1 && hasAnyScrapedImages(_boards) && (
           <div className="flex justify-between items-center mb-4 max-w-3xl mx-auto">
             <button
               onClick={() => setActiveBoardIndex(prev => Math.max(0, prev - 1))}
-              disabled={activeBoardIndex === 0}
+              disabled={_activeBoardIndex === 0}
               className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <span className="text-[#2C2C2C]">
-              Board {activeBoardIndex + 1} of {boards.length}
+              Board {_activeBoardIndex + 1} of {_boards.length}
             </span>
             <button
-              onClick={() => setActiveBoardIndex(prev => Math.min(boards.length - 1, prev + 1))}
-              disabled={activeBoardIndex === boards.length - 1}
+              onClick={() => setActiveBoardIndex(prev => Math.min(_boards.length - 1, prev + 1))}
+              disabled={_activeBoardIndex === _boards.length - 1}
               className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
             >
               <ChevronRight className="w-5 h-5" />
@@ -821,18 +788,18 @@ export function MultiBoardPreview({
         )}
 
         {/* Main Content Panel */}
-        {boards[activeBoardIndex]?.scrapedImages.length > 0 && (
+        {_boards[_activeBoardIndex]?.scrapedImages.length > 0 && (
           <div className="bg-white rounded-xl p-8 max-w-3xl mx-auto space-y-8">
             {/* Image Selection Grid */}
             <section>
               <h2 className="text-xl font-normal mb-4 text-[#4D4D4D] text-center"><i>Select</i> <b>Images</b></h2>
               <ImageSelectionSection
-                images={boards[activeBoardIndex].scrapedImages}
-                selectedIndices={boards[activeBoardIndex].selectedIndices}
+                images={_boards[_activeBoardIndex].scrapedImages}
+                selectedIndices={_boards[_activeBoardIndex].selectedIndices}
                 onSelect={handleImageSelect}
-                onRemove={(imageIndex) => handleImageRemove(activeBoardIndex, imageIndex)}
-                isMultiBoard={true}
-                boardIndex={activeBoardIndex}
+                _onRemove={(imageIndex: number) => handleImageRemove(_activeBoardIndex, imageIndex)}
+                _isMultiBoard={true}
+                _boardIndex={_activeBoardIndex}
               />
             </section>
 
@@ -840,27 +807,29 @@ export function MultiBoardPreview({
             <section>
               <PrintBoardPreview
                 layout={{
-                  images: boards[activeBoardIndex].selectedIndices
+                  images: _boards[_activeBoardIndex].selectedIndices
                     .map(index => ({
-                      url: boards[activeBoardIndex].scrapedImages[index].url,
-                      alt: boards[activeBoardIndex].scrapedImages[index].alt,
+                      url: _boards[_activeBoardIndex].scrapedImages[index].url,
+                      alt: _boards[_activeBoardIndex].scrapedImages[index].alt,
                       position: { x: 0, y: 0, w: 1, h: 1 },
                       rotation: 0
                     })),
                   size: {
-                    width: boards[activeBoardIndex].printSize.width,
-                    height: boards[activeBoardIndex].printSize.height
+                    width: _boards[_activeBoardIndex].printSize.width,
+                    height: _boards[_activeBoardIndex].printSize.height
                   }
                 }}
-                printSize={boards[activeBoardIndex].printSize}
-                spacing={boards[activeBoardIndex].spacing}
-                containMode={boards[activeBoardIndex].containMode}
-                isPortrait={boards[activeBoardIndex].isPortrait}
-                cornerRounding={boards[activeBoardIndex].cornerRounding}
-                onRemoveImage={(index) => handleImageRemove(activeBoardIndex, index)}
-                onImageSwap={(sourceIndex, targetIndex) => handleImageSwap(sourceIndex, targetIndex)}
-                index={activeBoardIndex}
-                images={boards[activeBoardIndex].scrapedImages}
+                printSize={_boards[_activeBoardIndex].printSize}
+                spacing={_boards[_activeBoardIndex].spacing}
+                containMode={_boards[_activeBoardIndex].containMode}
+                isPortrait={_boards[_activeBoardIndex].isPortrait}
+                cornerRounding={_boards[_activeBoardIndex].cornerRounding}
+                onRemoveImage={(index) => handleImageRemove(_activeBoardIndex, index)}
+                onImageSwap={(sourceIndex: number, targetIndex: number) => {
+                  handleImageSwap(sourceIndex, targetIndex);
+                }}
+                _index={_activeBoardIndex}
+                images={_boards[_activeBoardIndex].scrapedImages}
               />
 
               {/* Layout Controls */}
@@ -874,10 +843,10 @@ export function MultiBoardPreview({
                       min="0"
                       max="2"
                       step="0.1"
-                      value={boards[activeBoardIndex].spacing}
+                      value={_boards[_activeBoardIndex].spacing}
                       onChange={(e) => {
-                        const newBoards = [...boards];
-                        newBoards[activeBoardIndex].spacing = parseFloat(e.target.value);
+                        const newBoards = [..._boards];
+                        newBoards[_activeBoardIndex].spacing = parseFloat(e.target.value);
                         setBoards(newBoards);
                       }}
                       className="w-full accent-[#4D4D4D]"
@@ -890,10 +859,10 @@ export function MultiBoardPreview({
                       type="range"
                       min="0"
                       max="12"
-                      value={boards[activeBoardIndex].cornerRounding}
+                      value={_boards[_activeBoardIndex].cornerRounding}
                       onChange={(e) => {
-                        const newBoards = [...boards];
-                        newBoards[activeBoardIndex].cornerRounding = parseInt(e.target.value);
+                        const newBoards = [..._boards];
+                        newBoards[_activeBoardIndex].cornerRounding = parseInt(e.target.value);
                         setBoards(newBoards);
                       }}
                       className="w-full accent-[#4D4D4D]"
@@ -905,32 +874,32 @@ export function MultiBoardPreview({
                 <div className="flex flex-wrap justify-center gap-2 max-w-[440px] mx-auto mt-2">
                   <button
                     onClick={() => {
-                      const newBoards = [...boards];
-                      newBoards[activeBoardIndex].containMode = !newBoards[activeBoardIndex].containMode;
+                      const newBoards = [..._boards];
+                      newBoards[_activeBoardIndex].containMode = !newBoards[_activeBoardIndex].containMode;
                       setBoards(newBoards);
                     }}
                     className={`w-[210px] h-10 px-4 rounded-lg border transition-colors ${
-                      boards[activeBoardIndex].containMode
+                      _boards[_activeBoardIndex].containMode
                         ? 'border-[#4D4D4D] bg-[rgba(77,77,77,0.05)] text-[#4D4D4D]'
                         : 'border-gray-200 text-[#4D4D4D]'
                     }`}
                   >
-                    {boards[activeBoardIndex].containMode ? 'Cover' : 'Contain'}
+                    {_boards[_activeBoardIndex].containMode ? 'Cover' : 'Contain'}
                   </button>
 
                   <button
                     onClick={() => {
-                      const newBoards = [...boards];
-                      newBoards[activeBoardIndex].isPortrait = !newBoards[activeBoardIndex].isPortrait;
+                      const newBoards = [..._boards];
+                      newBoards[_activeBoardIndex].isPortrait = !newBoards[_activeBoardIndex].isPortrait;
                       setBoards(newBoards);
                     }}
                     className={`w-[210px] h-10 px-4 rounded-lg border transition-colors ${
-                      boards[activeBoardIndex].isPortrait
+                      _boards[_activeBoardIndex].isPortrait
                         ? 'border-[#4D4D4D] bg-[rgba(77,77,77,0.05)] text-[#4D4D4D]'
                         : 'border-gray-200 text-[#4D4D4D]'
                     }`}
                   >
-                    {boards[activeBoardIndex].isPortrait ? 'Portrait' : 'Landscape'}
+                    {_boards[_activeBoardIndex].isPortrait ? 'Portrait' : 'Landscape'}
                   </button>
                 </div>
               </div>
@@ -942,13 +911,13 @@ export function MultiBoardPreview({
                     <button
                       key={`${size.width}x${size.height}`}
                       onClick={() => {
-                        const newBoards = [...boards];
-                        newBoards[activeBoardIndex].printSize = size;
+                        const newBoards = [..._boards];
+                        newBoards[_activeBoardIndex].printSize = size;
                         setBoards(newBoards);
                       }}
                       className={`p-3 rounded-lg border text-sm transition-all w-[150px] ${
-                        boards[activeBoardIndex].printSize.width === size.width &&
-                        boards[activeBoardIndex].printSize.height === size.height
+                        _boards[_activeBoardIndex].printSize.width === size.width &&
+                        _boards[_activeBoardIndex].printSize.height === size.height
                           ? 'border-[#4D4D4D] bg-[rgba(77,77,77,0.05)] text-[#4D4D4D]'
                           : 'border-gray-200 text-[#4D4D4D]'
                       }`}
@@ -998,7 +967,7 @@ export function MultiBoardPreview({
                   className="w-full bg-[#D4A5A5] text-white px-6 py-3 rounded-lg hover:bg-[#b38989] transition-colors"
                 >
                   {isMultiMode 
-                    ? `Checkout ${boards.filter(board => board.selectedIndices.length > 0).length} Boards`
+                    ? `Checkout ${_boards.filter(board => board.selectedIndices.length > 0).length} Boards`
                     : 'Checkout Board'
                   }
                 </button>
@@ -1008,9 +977,9 @@ export function MultiBoardPreview({
         )}
 
         {/* General error message */}
-        {error && (
+        {_error && (
           <div className="fixed top-4 right-4 left-4 sm:left-auto bg-[#D4A5A5]/10 border border-[#D4A5A5] text-[#D4A5A5] px-4 py-3 rounded">
-            {error}
+            {_error}
           </div>
         )}
       </div>
@@ -1018,4 +987,4 @@ export function MultiBoardPreview({
   );
 }
 
-export default MultiBoardPreview; 
+export default MultiBoardPreview;

@@ -2,17 +2,22 @@ import React from 'react';
 import type { Layout } from '@/app/types';
 import type { PrintSize } from '@/app/types/order';
 
+interface DragItem {
+  type: string;
+  index: number;
+}
+
 interface PrintBoardPreviewProps {
-  layout: Layout | null;
+  _layout: Layout | null;
   printSize: PrintSize;
   spacing: number;
   containMode: boolean;
   isPortrait: boolean;
   onRemoveImage: (index: number) => void;
-  onReorderImages?: (newOrder: number[]) => void;
+  _onReorderImages?: (newOrder: number[]) => void;
   cornerRounding: number;
-  onImageSwap: (sourceIndex: number, targetIndex: number) => void;
-  index: number;
+  _onImageSwap: (sourceIndex: number, targetIndex: number) => void;
+  _index: number;
   images: Array<{
     url: string;
     alt?: string;
@@ -21,20 +26,20 @@ interface PrintBoardPreviewProps {
   }>;
 }
 
-export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
-  images,
-  layout,
+export function PrintBoardPreview({
+  _layout,
   printSize,
   spacing,
   containMode,
   isPortrait,
   onRemoveImage,
-  onReorderImages,
+  _onReorderImages,
   cornerRounding,
-  onImageSwap,
-  index
-}) => {
-  const getGridConfig = (imageCount: number) => {
+  _onImageSwap,
+  _index,
+  images
+}: PrintBoardPreviewProps): JSX.Element {
+  const getGridConfig = (imageCount: number): { cols: number; rows: number } => {
     switch (imageCount) {
       case 1: return { cols: 1, rows: 1 };
       case 2: return { cols: 2, rows: 1 };
@@ -48,7 +53,7 @@ export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
     }
   };
 
-  const getDisplayDimensions = () => {
+  const getDisplayDimensions = (): { width: number; height: number } => {
     const maxWidth = isPortrait ? 500 : 700;
     const maxHeight = isPortrait ? 700 : 500;
 
@@ -66,6 +71,14 @@ export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
     }
 
     return { width, height };
+  };
+
+  const _handleImageClick = (index: number): void => {
+    onRemoveImage(index);
+  };
+
+  const _handleDrop = (_item: DragItem, _targetIndex: number): void => {
+    // Implementation
   };
 
   const { width, height } = getDisplayDimensions();
@@ -127,4 +140,4 @@ export const PrintBoardPreview: React.FC<PrintBoardPreviewProps> = ({
       </div>
     </div>
   );
-}; 
+} 

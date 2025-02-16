@@ -1,15 +1,10 @@
 import React from 'react';
-import type { ScrapedImage } from '@/app/types';
 
 interface ImageReplaceModalProps {
-  scrapedImages: Array<{
-    url: string;
-    alt?: string;
-    thumbnailUrl?: string;
-  }>;
-  onSelect: (newImageIndex: number) => void;
-  onClose: () => void;
+  scrapedImages: Array<{ url: string; alt?: string }>;
   selectedIndices: number[];
+  onSelect: (index: number) => void;
+  onClose: () => void;
 }
 
 export function ImageReplaceModal({

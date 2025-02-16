@@ -60,8 +60,8 @@ const ParentComponent = () => {
             <MultiBoardPreview 
               isMultiMode={isMultiBoard}
               onMultiModeChange={setIsMultiBoard}
-              selectedBoards={boards}
-              onBoardsChange={setBoards}
+              _selectedBoards={boards}
+              _onBoardsChange={setBoards}
             />
           </DragDropProvider>
         </main>

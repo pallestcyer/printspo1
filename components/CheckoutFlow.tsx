@@ -18,43 +18,43 @@ interface CheckoutFlowProps {
   onError: (message: string) => void;
 }
 
-export const CheckoutFlow = ({
+export function CheckoutFlow({
   layout,
   printSize,
   onSuccess,
   onError
-}: CheckoutFlowProps) => {
+}: CheckoutFlowProps): JSX.Element {
   const [loading, setLoading] = useState(false);
 
   const handleCheckout = async (): Promise<void> => {
     try {
       setLoading(true);
-      console.log('Starting checkout...');
-      
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          layout,
-          printSize
-        })
+        body: JSON.stringify({ layout, printSize })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create order');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create order');
       }
 
-      const data = await response.json();
-      const { sessionId, orderId } = data;
-      
+      const { sessionId, orderId } = await response.json();
       const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-      if (!stripe) throw new Error('Failed to load payment processor');
       
-      await stripe.redirectToCheckout({ sessionId });
+      if (!stripe) {
+        throw new Error('Failed to load payment processor');
+      }
+
+      const { error: checkoutError } = await stripe.redirectToCheckout({ sessionId });
+      if (checkoutError) {
+        throw checkoutError;
+      }
+
       onSuccess(orderId);
-    } catch (error) {
-      console.error('Checkout error:', error);
-      onError(error instanceof Error ? error.message : 'Failed to process checkout');
+    } catch (_error) {
+      onError(_error instanceof Error ? _error.message : 'Checkout failed');
     } finally {
       setLoading(false);
     }
@@ -64,16 +64,9 @@ export const CheckoutFlow = ({
     <button
       onClick={handleCheckout}
       disabled={loading}
-      className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50"
+      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
     >
-      {loading ? (
-        <span className="flex items-center justify-center gap-2">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          Processing...
-        </span>
-      ) : (
-        `Checkout - $${printSize.price}`
-      )}
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Checkout'}
     </button>
   );
-}; 
+} 
