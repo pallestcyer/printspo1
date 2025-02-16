@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import puppeteer from 'puppeteer-core';
+import puppeteer from 'puppeteer';
 import chromium from '@sparticuz/chromium';
 
 // Configure route options
@@ -58,36 +58,63 @@ const extractImagesFromPage = () => {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
-    // Properly configure chromium for serverless
-    const executablePath = await chromium.executablePath();
-
-    const browser = await puppeteer.launch({
-      args: [
-        ...chromium.args,
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--hide-scrollbars',
-        '--disable-extensions',
-        '--force-color-profile=srgb',
-        '--font-render-hinting=none',
-        '--js-flags=--max-old-space-size=460', // Limit heap size
-        '--memory-pressure-off',
-        '--single-process' // Reduce memory usage
-      ],
-      defaultViewport: {
-        width: 1920,
-        height: 1080,
-        deviceScaleFactor: 1,
-      },
-      executablePath,
-      headless: true,
-      ignoreHTTPSErrors: true,
-    });
-
-    return browser as PuppeteerBrowser;
+    const isDev = process.env.NODE_ENV === 'development';
+    
+    if (isDev) {
+      // In development, use the locally installed Chrome
+      return await puppeteer.launch({
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--hide-scrollbars',
+          '--disable-extensions',
+          '--force-color-profile=srgb',
+          '--font-render-hinting=none',
+          '--js-flags=--max-old-space-size=460',
+          '--memory-pressure-off',
+          '--single-process'
+        ],
+        defaultViewport: {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+        },
+        headless: true,
+        ignoreHTTPSErrors: true,
+      }) as PuppeteerBrowser;
+    } else {
+      // In production, use @sparticuz/chromium
+      const executablePath = await chromium.executablePath();
+      
+      return await puppeteer.launch({
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--hide-scrollbars',
+          '--disable-extensions',
+          '--force-color-profile=srgb',
+          '--font-render-hinting=none',
+          '--js-flags=--max-old-space-size=460',
+          '--memory-pressure-off',
+          '--single-process'
+        ],
+        defaultViewport: {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+        },
+        executablePath,
+        headless: true,
+        ignoreHTTPSErrors: true,
+      }) as PuppeteerBrowser;
+    }
   } catch (error) {
     console.error('Browser launch error:', error);
     throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -149,12 +176,34 @@ async function autoScroll(page: PuppeteerPage): Promise<void> {
   });
 }
 
+async function expandShortUrl(shortUrl: string): Promise<string> {
+  try {
+    const response = await fetch(shortUrl, {
+      method: 'HEAD',
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0'
+      }
+    });
+    return response.url;
+  } catch (error) {
+    console.error('Error expanding URL:', error);
+    throw new Error('Failed to expand shortened URL');
+  }
+}
+
 function validatePinterestUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
-    if (!urlObj.hostname.includes('pinterest.')) {
+    // Accept both pin.it and pinterest domains
+    if (!urlObj.hostname.includes('pinterest.') && !urlObj.hostname.includes('pin.it')) {
       return false;
     }
+    // For pin.it URLs, just verify basic structure
+    if (urlObj.hostname.includes('pin.it')) {
+      return true;
+    }
+    // For full Pinterest URLs, check path structure
     const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
     return pathParts.length >= 2;
   } catch (_e) {
@@ -167,19 +216,33 @@ export async function POST(req: Request): Promise<NextResponse> {
   let page: PuppeteerPage | undefined;
   
   try {
-    const { url } = await req.json();
+    const { url: inputUrl } = await req.json();
     
-    if (!url) {
+    if (!inputUrl) {
       return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
     }
 
-    if (!validatePinterestUrl(url)) {
-      return NextResponse.json({ error: 'Invalid Pinterest URL. Please make sure you\'re using a valid Pinterest board URL.' }, { status: 400 });
+    if (!validatePinterestUrl(inputUrl)) {
+      return NextResponse.json({ 
+        error: 'Invalid Pinterest URL. Please make sure you\'re using a valid Pinterest board or pin.it URL.' 
+      }, { status: 400 });
+    }
+
+    // Expand shortened URL if necessary
+    let expandedUrl = inputUrl;
+    if (inputUrl.includes('pin.it')) {
+      try {
+        expandedUrl = await expandShortUrl(inputUrl);
+      } catch (error) {
+        return NextResponse.json({ 
+          error: 'Failed to process shortened URL. Please try using the full Pinterest URL.' 
+        }, { status: 400 });
+      }
     }
 
     // Add global timeout for the entire operation
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Operation timed out')), 55000); // 55s to allow for cleanup
+      setTimeout(() => reject(new Error('Operation timed out')), 55000);
     });
 
     const scrapePromise = async () => {
@@ -193,7 +256,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       // Navigate to the page with better error handling
       try {
-        await page.goto(url, { 
+        await page.goto(expandedUrl, { 
           waitUntil: 'domcontentloaded',
           timeout: 25000
         });

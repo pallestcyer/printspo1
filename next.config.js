@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    transpilePackages: ['puppeteer-core'],
     webpack: (config, { isServer }) => {
       if (isServer) {
         config.module.rules.push({
@@ -7,22 +8,39 @@ const nextConfig = {
           use: ['ignore-loader']
         });
       }
+      // Handle ESM modules
+      config.resolve.extensionAlias = {
+        '.js': ['.js', '.ts', '.tsx']
+      };
       // Suppress punycode warning
       config.ignoreWarnings = [
         { module: /node_modules\/punycode/ }
       ];
       return config;
     },
+    async headers() {
+      return [
+        {
+          // Allow CORS for API routes in development
+          source: '/api/:path*',
+          headers: [
+            { key: 'Access-Control-Allow-Origin', value: '*' },
+            { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+            { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+          ],
+        },
+      ];
+    },
     experimental: {
-      serverComponentsExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
+      serverActions: true,
+      esmExternals: 'loose'
     },
     reactStrictMode: true,
     images: {
       remotePatterns: [
         {
           protocol: 'https',
-          hostname: 'i.pinimg.com',
-          pathname: '/**',
+          hostname: '**.pinimg.com',
         },
       ],
     },

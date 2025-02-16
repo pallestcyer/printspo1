@@ -209,7 +209,11 @@ export function MultiBoardPreview({
       // Show initial loading progress
       setLoadingStates(prev => ({ ...prev, [board.id]: 30 }));
 
-      const response = await fetch('/api/scrape', {
+      const apiUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:3000/api/scrape'
+        : '/api/scrape';
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -218,6 +222,12 @@ export function MultiBoardPreview({
         body: JSON.stringify({ 
           url: url.trim() 
         })
+      }).catch(error => {
+        console.error('Fetch error:', error);
+        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+          throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+        }
+        throw error;
       });
 
       setLoadingStates(prev => ({ ...prev, [board.id]: 60 }));
