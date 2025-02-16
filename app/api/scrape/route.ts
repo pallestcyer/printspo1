@@ -6,28 +6,24 @@ import fs from 'fs';
 
 // Configure route options
 export const runtime = 'nodejs';
-export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
+export const dynamic = 'force-dynamic';
+export const preferredRegion = 'iad1';
 export const maxDuration = 60;
 
 // Determine environment
 const isVercel = process.env.VERCEL === '1';
 
-// Configure Chromium differently based on environment
+// Configure Chromium with minimal settings
 const chromiumConfig = {
   args: [
-    ...chromium.args,
-    '--js-flags=--max-old-space-size=512',
-    '--memory-pressure-off',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--headless',
     '--single-process',
     '--no-zygote',
-    '--disable-gpu',
-    '--disable-dev-shm-usage',
-    '--disable-setuid-sandbox',
-    '--no-first-run',
-    '--no-sandbox',
-    '--aggressive-cache-discard',
-    '--disable-features=site-per-process',
-    '--js-flags="--expose-gc"'
+    '--no-first-run'
   ]
 };
 
@@ -121,35 +117,37 @@ async function _ensureChromiumInTemp(): Promise<string> {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
+    // Get the Chrome executable path
     const executablePath = await chromium.executablePath();
+    console.log('Chrome executable path:', executablePath);
+
     const options = {
-      args: [
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-setuid-sandbox',
-        '--no-sandbox',
-        '--single-process',
-        '--no-zygote',
-        '--js-flags=--max-old-space-size=512'
-      ],
+      args: chromiumConfig.args,
       executablePath,
       defaultViewport: {
-        width: 600,
-        height: 800,
-        deviceScaleFactor: 1,
+        width: 800,
+        height: 600
       },
-      headless: true,
-      ignoreHTTPSErrors: true
+      headless: true
     };
 
+    console.log('Launching browser with options:', JSON.stringify(options, null, 2));
     const browser = await puppeteer.launch(options);
+    console.log('Browser launched successfully');
+    
     return browser as PuppeteerBrowser;
   } catch (error: unknown) {
-    console.error('Browser launch error:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to launch browser: ${error.message}`);
-    }
-    throw error;
+    console.error('Detailed browser launch error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      executablePath: await chromium.executablePath().catch(() => 'Failed to get path')
+    });
+    
+    throw new Error(
+      error instanceof Error 
+        ? `Failed to launch browser: ${error.message}`
+        : 'Failed to launch browser: Unknown error'
+    );
   }
 }
 
@@ -285,6 +283,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   let page = null;
   
   try {
+    console.log('Starting Pinterest scraping process');
     const { url } = await request.json();
     
     if (!validatePinterestUrl(url)) {
@@ -294,52 +293,70 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    // Expand short URLs if needed
+    console.log('Expanding URL if needed');
     const fullUrl = url.includes('pin.it') ? await expandShortUrl(url) : url;
+    console.log('Full URL:', fullUrl);
     
+    console.log('Initializing browser');
     browser = await getBrowser();
+    console.log('Creating new page');
     page = await browser.newPage();
     
-    // Set minimal viewport and timeout
+    console.log('Setting up page configuration');
     await page.setViewport({ width: 800, height: 600 });
     await page.setDefaultNavigationTimeout(15000);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
     
-    // Navigate with optimized settings
+    console.log('Navigating to Pinterest URL');
     await page.goto(fullUrl, { 
-      waitUntil: 'domcontentloaded',  // Don't wait for full load
+      waitUntil: 'domcontentloaded',
       timeout: 15000
     });
 
-    // Quick check for images with short timeout
+    console.log('Waiting for images to load');
     try {
       await page.waitForSelector('img[src*="pinimg.com"]', { timeout: 5000 });
+      console.log('Images found on page');
     } catch (_error) {
-      // Continue even if timeout - some images might still be there
+      console.log('Timeout waiting for images, continuing anyway');
     }
     
+    console.log('Extracting images from page');
     const rawImages = await page.evaluate(extractImagesFromPage);
+    console.log(`Found ${rawImages?.length || 0} raw images`);
+    
     await page.close();
     page = null;
+    await browser.close();
+    browser = null;
     
     if (!rawImages || rawImages.length === 0) {
       throw new Error('No images found on the Pinterest board');
     }
 
-    // Validate images in smaller batches
+    console.log('Validating images');
     const validatedImages = await validateImages(rawImages);
+    console.log(`Validated ${validatedImages.length} images`);
     
     if (validatedImages.length === 0) {
       throw new Error('No valid images found on the Pinterest board');
     }
 
+    console.log('Successfully completed scraping process');
     return NextResponse.json({
       success: true,
       images: validatedImages
     });
 
   } catch (error) {
-    console.error('Scraping error:', error);
+    console.error('Detailed scraping error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      phase: 'scraping',
+      browserInitialized: !!browser,
+      pageCreated: !!page
+    });
+    
     const errorMessage = error instanceof Error 
       ? error.message 
       : 'Failed to import from Pinterest. Please check the URL and try again.';
@@ -349,8 +366,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       error: errorMessage
     }, { status: 500 });
   } finally {
-    if (page) await page.close().catch(console.error);
-    if (browser) await browser.close().catch(console.error);
+    try {
+      if (page) await page.close();
+      if (browser) await browser.close();
+    } catch (_cleanupError) {
+      console.error('Error during cleanup:', _cleanupError);
+    }
   }
 }
 
