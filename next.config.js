@@ -32,7 +32,7 @@ const nextConfig = {
       ];
     },
     experimental: {
-      serverComponentsExternalPackages: ['puppeteer-core']
+      serverComponentsExternalPackages: ['@sparticuz/chromium']
     },
     reactStrictMode: true,
     images: {

@@ -110,22 +110,21 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
         '--single-process',
       ],
       executablePath,
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
       defaultViewport: {
         width: 1920,
         height: 1080,
         deviceScaleFactor: 1,
-      }
+      },
+      headless: true,
+      ignoreHTTPSErrors: true
     };
 
     const browser = await puppeteer.launch(options);
     return browser as PuppeteerBrowser;
   } catch (error: unknown) {
     console.error('Browser launch error:', error);
-    
     if (error instanceof Error) {
-      throw new Error(`Failed to launch browser in production: ${error.message}`);
+      throw new Error(`Failed to launch browser: ${error.message}`);
     }
     throw error;
   }
