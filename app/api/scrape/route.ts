@@ -275,64 +275,46 @@ async function validateImages(images: PinterestImage[]): Promise<PinterestImage[
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const browser = await getBrowser();
   try {
     const { url } = await request.json();
+    const page = await browser.newPage();
     
-    // Try Pinterest API approach first
-    try {
-      console.log('Attempting Pinterest API approach...');
-      const response = await fetch(url);
-      const html = await response.text();
-      
-      const images = extractImagesFromPinterestHtml(html);
-      
-      // If we found images, return them
-      if (images && images.length > 0) {
-        console.log('Successfully extracted images using Pinterest API approach');
-        return NextResponse.json({ images });
-      }
-      
-      console.log('No images found with Pinterest API approach, falling back to Puppeteer...');
-    } catch (apiError) {
-      console.log('Pinterest API approach failed, falling back to Puppeteer...', apiError);
-    }
-    
-    // Fall back to Puppeteer approach
-    const browser = await getBrowser();
-    try {
-      const page = await browser.newPage();
-      await page.setViewport({ width: 600, height: 800 });
-      await page.goto(url, { waitUntil: 'networkidle0' });
-      
-      const images = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('img[src*="pinimg.com"]'))
-          .slice(0, 50)
-          .map(img => {
-            const imgElement = img as HTMLImageElement;
-            const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
-            if (url.includes('avatar') || url.includes('profile')) return null;
-            
-            return {
-              url,
-              alt: imgElement.alt || '',
-              width: 1200,
-              height: 1200
-            };
-          })
-          .filter(Boolean);
-      });
-      
-      return NextResponse.json({ images });
-    } finally {
-      await browser.close();
-    }
-    
+    await page.setViewport({ width: 600, height: 800 });
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 });
+
+    const images = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('img[src*="pinimg.com"]'))
+        .slice(0, 50)
+        .map(img => {
+          const imgElement = img as HTMLImageElement;
+          const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
+          if (url.includes('avatar') || url.includes('profile')) return null;
+          
+          const pinLink = imgElement.closest('a[href*="/pin/"]') as HTMLAnchorElement;
+          const id = pinLink?.href?.split('/pin/')[1]?.split('/')[0] || 
+                    `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          return {
+            url,
+            alt: imgElement.alt || '',
+            width: 1200,
+            height: 1200,
+            id
+          };
+        })
+        .filter(Boolean);
+    });
+
+    return NextResponse.json({ images });
   } catch (error) {
     console.error('Scraping error:', error);
     return NextResponse.json(
       { error: 'Failed to scrape Pinterest images' },
       { status: 500 }
     );
+  } finally {
+    await browser.close();
   }
 }
 
