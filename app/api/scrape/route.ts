@@ -45,7 +45,8 @@ interface PinterestImage {
   id: string;
 }
 
-interface RawPinterestImage {
+// Prefix unused interface with underscore
+interface _RawPinterestImage {
   url: string;
   alt: string;
   width: number;
@@ -71,7 +72,8 @@ const extractImagesFromPage = () => {
   })).filter(img => img.width >= 200 && !img.url.includes('avatar') && !img.url.includes('profile'));
 };
 
-async function ensureChromiumInTemp(): Promise<string> {
+// Prefix unused function with underscore
+async function _ensureChromiumInTemp(): Promise<string> {
   try {
     // Ensure /tmp exists
     if (!fs.existsSync('/tmp')) {
@@ -96,6 +98,7 @@ async function ensureChromiumInTemp(): Promise<string> {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
+    // Get the Chrome executable path
     const executablePath = await chromium.executablePath();
     
     const options = {
@@ -108,6 +111,7 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
         '--no-sandbox',
         '--no-zygote',
         '--single-process',
+        '--font-render-hinting=none'
       ],
       executablePath,
       defaultViewport: {
@@ -116,7 +120,8 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
         deviceScaleFactor: 1,
       },
       headless: true,
-      ignoreHTTPSErrors: true
+      ignoreHTTPSErrors: true,
+      protocolTimeout: 30000
     };
 
     const browser = await puppeteer.launch(options);
@@ -130,8 +135,8 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
   }
 }
 
-// Add timeout wrapper for fetch operations
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 5000): Promise<Response> {
+// Prefix unused function with underscore
+async function _fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 5000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
 
@@ -166,7 +171,8 @@ async function isValidImageUrl(url: string): Promise<boolean> {
   }
 }
 
-async function autoScroll(page: PuppeteerPage): Promise<void> {
+// Prefix unused function with underscore
+async function _autoScroll(page: PuppeteerPage): Promise<void> {
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       let totalHeight = 0;
@@ -195,8 +201,8 @@ async function expandShortUrl(shortUrl: string): Promise<string> {
       }
     });
     return response.url;
-  } catch (error) {
-    console.error('Error expanding URL:', error);
+  } catch (_error) {
+    console.error('Error expanding URL:', _error);
     throw new Error('Failed to expand shortened URL');
   }
 }
@@ -264,7 +270,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           waitUntil: 'domcontentloaded',
           timeout: 15000
         });
-      } catch (navigationError) {
+      } catch (_navigationError) {
         throw new Error('Failed to load Pinterest board. Please check if the board is public and try again.');
       }
 
@@ -289,7 +295,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         try {
           const isValid = await isValidImageUrl(img.url);
           return isValid ? img : null;
-        } catch {
+        } catch (_error) {
           return null;
         }
       });

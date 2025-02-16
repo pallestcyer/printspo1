@@ -1,5 +1,3 @@
-import type { PrintSize } from '@/app/types';
-
 export const PRINT_SIZES = [
   { width: 5, height: 7, price: 9, name: '5x7' },
   { width: 8.5, height: 11, price: 12, name: '8.5x11' },
