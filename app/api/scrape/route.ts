@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import path from 'path';
+import fs from 'fs';
 
 // Configure route options
 export const runtime = 'nodejs';
 export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
 export const maxDuration = 60;
 
-// Configure Chromium
+// Configure Chromium with memory-optimized settings
 chromium.setGraphicsMode = false;
 chromium.setHeadlessMode = true;
 
@@ -61,57 +63,75 @@ const extractImagesFromPage = () => {
   })).filter(img => img.width >= 200 && !img.url.includes('avatar') && !img.url.includes('profile'));
 };
 
+async function ensureChromiumInTemp(): Promise<string> {
+  try {
+    // Ensure /tmp exists
+    if (!fs.existsSync('/tmp')) {
+      fs.mkdirSync('/tmp', { recursive: true });
+    }
+
+    // Get the path where Chromium should be
+    const chromiumPath = await chromium.executablePath();
+    const chromiumDir = path.dirname(chromiumPath);
+
+    // Create the directory if it doesn't exist
+    if (!fs.existsSync(chromiumDir)) {
+      fs.mkdirSync(chromiumDir, { recursive: true });
+    }
+
+    return chromiumPath;
+  } catch (error) {
+    console.error('Error ensuring Chromium directory:', error);
+    throw new Error('Failed to setup Chromium directory');
+  }
+}
+
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
     const isDev = process.env.NODE_ENV === 'development';
     
-    if (isDev) {
-      // In development, use the locally installed Chrome
-      return await puppeteer.launch({
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--hide-scrollbars',
-          '--disable-extensions',
-          '--force-color-profile=srgb',
-          '--font-render-hinting=none',
-          '--js-flags=--max-old-space-size=460',
-          '--memory-pressure-off',
-          '--single-process'
-        ],
-        defaultViewport: {
-          width: 1920,
-          height: 1080,
-          deviceScaleFactor: 1,
-        },
-        headless: true,
-        ignoreHTTPSErrors: true,
-      }) as PuppeteerBrowser;
-    } else {
-      // In production (Vercel), use @sparticuz/chromium
-      const options = {
-        args: chromium.args,
-        executablePath: process.env.CHROME_BIN || await chromium.executablePath('/tmp/chromium'),
-        headless: true,
-        defaultViewport: {
-          width: 1920,
-          height: 1080,
-          deviceScaleFactor: 1,
-        },
-        ignoreHTTPSErrors: true,
-      };
+    // Get Chrome path from environment variable or use default paths
+    const defaultWindowsPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    const defaultLinuxPath = '/usr/bin/google-chrome';
+    const customChromePath = process.env.CHROME_PATH;
+    
+    const options = {
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+        '--no-zygote'
+      ],
+      defaultViewport: {
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 1,
+      },
+      executablePath: isDev 
+        ? customChromePath || (process.platform === 'win32' ? defaultWindowsPath : defaultLinuxPath)
+        : await chromium.executablePath(),
+      headless: true,
+      ignoreHTTPSErrors: true
+    };
 
-      // Initialize Chromium
-      await chromium.font('https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf');
-      const browser = await puppeteer.launch(options);
-      return browser as PuppeteerBrowser;
-    }
-  } catch (error) {
+    const browser = await puppeteer.launch(options);
+    return browser as PuppeteerBrowser;
+  } catch (error: unknown) {
     console.error('Browser launch error:', error);
-    throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    
+    // Provide more helpful error message for common issues
+    if (error instanceof Error) {
+      if (error.message.includes('not exist')) {
+        const helpMessage = process.platform === 'win32'
+          ? 'Chrome executable not found. Please ensure Google Chrome is installed in the default location (C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe), ' +
+            'or set CHROME_PATH environment variable to your Chrome executable path.'
+          : 'Chrome executable not found. Please ensure Google Chrome is installed, or set CHROME_PATH environment variable to your Chrome executable path.';
+        throw new Error(helpMessage);
+      }
+    }
+    throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -135,13 +155,13 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 
 async function isValidImageUrl(url: string): Promise<boolean> {
   try {
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'HEAD',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0',
         'Referer': 'https://www.pinterest.com/'
       }
-    }, 5000);
+    });
     
     if (!response.ok) return false;
     const contentType = response.headers.get('content-type');
@@ -222,73 +242,54 @@ export async function POST(req: Request): Promise<NextResponse> {
       }, { status: 400 });
     }
 
-    // Expand shortened URL if necessary
-    let expandedUrl = inputUrl;
-    if (inputUrl.includes('pin.it')) {
-      try {
-        expandedUrl = await expandShortUrl(inputUrl);
-      } catch (error) {
-        return NextResponse.json({ 
-          error: 'Failed to process shortened URL. Please try using the full Pinterest URL.' 
-        }, { status: 400 });
-      }
-    }
-
-    // Add global timeout for the entire operation
+    // Add global timeout to ensure we stay within serverless limits
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Operation timed out')), 55000);
+      setTimeout(() => reject(new Error('Operation timed out')), 50000);
     });
 
     const scrapePromise = async () => {
       browser = await getBrowser();
       page = await browser.newPage();
       
-      // Configure page settings
-      await page.setViewport({ width: 1920, height: 1080 });
-      await page.setDefaultNavigationTimeout(25000);
+      await page.setDefaultNavigationTimeout(15000);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
 
-      // Navigate to the page with better error handling
+      // Expand shortened URL if necessary
+      let expandedUrl = inputUrl;
+      if (inputUrl.includes('pin.it')) {
+        try {
+          expandedUrl = await expandShortUrl(inputUrl);
+        } catch (error) {
+          throw new Error('Failed to process shortened URL. Please try using the full Pinterest URL.');
+        }
+      }
+
       try {
         await page.goto(expandedUrl, { 
           waitUntil: 'domcontentloaded',
-          timeout: 25000
+          timeout: 15000
         });
-      } catch (error) {
+      } catch (navigationError) {
         throw new Error('Failed to load Pinterest board. Please check if the board is public and try again.');
       }
 
-      // Extract images with timeout and memory cleanup
       const images = await Promise.race([
-        page.evaluate(extractImagesFromPage).then(async (imgs) => {
-          // Clean up page after extraction
-          if (page) {
-            await page.close();
-            page = undefined;
-          }
-          return imgs;
-        }),
+        page.evaluate(extractImagesFromPage),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Image extraction timed out')), 20000)
+          setTimeout(() => reject(new Error('Image extraction timed out')), 10000)
         )
       ]) as PinterestImage[];
 
-      // Close browser and page after extraction
-      if (page) await page.close();
-      if (browser) {
-        await browser.close();
-        browser = undefined;
-      }
+      // Close page early to free up memory
+      await page.close();
+      page = undefined;
 
       if (!images || images.length === 0) {
-        return NextResponse.json(
-          { error: 'No images found on this Pinterest board. Please check if the board is public and contains images.' },
-          { status: 400 }
-        );
+        throw new Error('No images found on this Pinterest board. Please check if the board is public and contains images.');
       }
 
-      // Validate first few images only to stay within time limit
-      const imagesToValidate = images.slice(0, 12);
+      // Validate only first 6 images to stay within time limits
+      const imagesToValidate = images.slice(0, 6);
       const validationPromises = imagesToValidate.map(async (img: PinterestImage) => {
         try {
           const isValid = await isValidImageUrl(img.url);
@@ -298,31 +299,21 @@ export async function POST(req: Request): Promise<NextResponse> {
         }
       });
 
-      // Add timeout for the entire validation process
-      const validatedImages = await Promise.race([
-        Promise.all(validationPromises),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Image validation timed out')), 10000)
-        )
-      ]) as (PinterestImage | null)[];
-
+      const validatedImages = await Promise.all(validationPromises);
       const filteredImages = validatedImages.filter((img): img is PinterestImage => img !== null);
 
       if (filteredImages.length === 0) {
-        return NextResponse.json(
-          { error: 'Could not access any images from this board. Please check if the images are publicly accessible.' },
-          { status: 400 }
-        );
+        throw new Error('Could not access any images from this board. Please check if the images are publicly accessible.');
       }
 
-      return NextResponse.json({ 
+      return { 
         images: filteredImages,
         total: filteredImages.length
-      });
+      };
     };
 
-    // Race between the scraping operation and the global timeout
-    return await Promise.race([scrapePromise(), timeoutPromise]) as NextResponse;
+    const result = await Promise.race([scrapePromise(), timeoutPromise]);
+    return NextResponse.json(result);
 
   } catch (error) {
     console.error('Error scraping Pinterest:', error);
@@ -334,7 +325,6 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 500 }
     );
   } finally {
-    // Ensure everything is cleaned up
     try {
       if (page) await page.close();
       if (browser) await browser.close();
