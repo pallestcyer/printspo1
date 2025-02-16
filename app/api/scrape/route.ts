@@ -31,17 +31,14 @@ const chromiumConfig = {
     '--aggressive-cache-discard',
     '--disable-features=site-per-process',
     '--disable-features=TranslateUI',
-    '--disable-features=BlinkGenPropertyTrees'
+    '--disable-features=BlinkGenPropertyTrees',
+    '--disable-javascript',
+    '--disable-images',
+    '--lite-mode'
   ]
 };
 
 if (isVercel) {
-  // Additional Vercel-specific optimizations
-  chromiumConfig.args.push(
-    '--disable-javascript',
-    '--disable-images',
-    '--lite-mode'
-  );
   chromium.setGraphicsMode = false;
   chromium.setHeadlessMode = true;
 }
@@ -351,7 +348,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       }, { status: 400 });
     }
 
-    // Even shorter timeout
+    // Shorter timeout
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Operation timed out')), 20000);
     });
@@ -362,6 +359,12 @@ export async function POST(req: Request): Promise<NextResponse> {
       
       await page.setDefaultNavigationTimeout(8000);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
+      
+      // Set minimal viewport
+      await page.setViewport({
+        width: 800,
+        height: 600
+      });
 
       let expandedUrl = inputUrl;
       if (inputUrl.includes('pin.it')) {
@@ -384,7 +387,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       const images = await Promise.race([
         page.evaluate(extractImagesFromPage),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Image extraction timed out')), 6000) // Increased slightly for more images
+          setTimeout(() => reject(new Error('Image extraction timed out')), 6000)
         )
       ]) as PinterestImage[];
 
@@ -398,7 +401,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         throw new Error('No images found on this Pinterest board. Please check if the board is public and contains images.');
       }
 
-      // Validate all images in batches
+      // Validate images in batches
       const validatedImages = await validateImages(images);
 
       if (validatedImages.length === 0) {
