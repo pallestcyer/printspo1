@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
 export const maxDuration = 60;
 
-// Configure Chromium for Vercel environment
+// Configure Chromium for Vercel environment with memory optimization
 chromium.setGraphicsMode = false;
 chromium.setHeadlessMode = true;
 chromium.args.push(
@@ -18,7 +18,18 @@ chromium.args.push(
   '--disable-dev-shm-usage',
   '--disable-gpu',
   '--single-process',
-  '--no-zygote'
+  '--no-zygote',
+  '--js-flags=--max-old-space-size=460', // Limit JS heap
+  '--disable-extensions',
+  '--disable-component-extensions-with-background-pages',
+  '--disable-default-apps',
+  '--mute-audio',
+  '--no-default-browser-check',
+  '--no-experiments',
+  '--aggressive-cache-discard',
+  '--disable-features=site-per-process',
+  '--disable-features=TranslateUI',
+  '--disable-features=BlinkGenPropertyTrees'
 );
 
 // Add proper type for page parameter
@@ -98,25 +109,14 @@ async function _ensureChromiumInTemp(): Promise<string> {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
-    // Get the Chrome executable path
     const executablePath = await chromium.executablePath();
     
     const options = {
-      args: [
-        ...chromium.args,
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-setuid-sandbox',
-        '--no-first-run',
-        '--no-sandbox',
-        '--no-zygote',
-        '--single-process',
-        '--font-render-hinting=none'
-      ],
+      args: chromium.args,
       executablePath,
       defaultViewport: {
-        width: 1920,
-        height: 1080,
+        width: 800, // Reduced from 1920
+        height: 600, // Reduced from 1080
         deviceScaleFactor: 1,
       },
       headless: true,
@@ -243,19 +243,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       }, { status: 400 });
     }
 
-    // Add global timeout to ensure we stay within serverless limits
+    // Reduced timeout to save memory
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Operation timed out')), 50000);
+      setTimeout(() => reject(new Error('Operation timed out')), 25000); // Reduced from 50000
     });
 
     const scrapePromise = async () => {
       browser = await getBrowser();
       page = await browser.newPage();
       
-      await page.setDefaultNavigationTimeout(15000);
+      await page.setDefaultNavigationTimeout(10000); // Reduced from 15000
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
 
-      // Expand shortened URL if necessary
       let expandedUrl = inputUrl;
       if (inputUrl.includes('pin.it')) {
         try {
@@ -267,8 +266,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       try {
         await page.goto(expandedUrl, { 
-          waitUntil: 'domcontentloaded',
-          timeout: 15000
+          waitUntil: 'domcontentloaded', // Using domcontentloaded instead of load to save memory
+          timeout: 10000 // Reduced from 15000
         });
       } catch (_navigationError) {
         throw new Error('Failed to load Pinterest board. Please check if the board is public and try again.');
@@ -277,11 +276,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       const images = await Promise.race([
         page.evaluate(extractImagesFromPage),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Image extraction timed out')), 10000)
+          setTimeout(() => reject(new Error('Image extraction timed out')), 5000) // Reduced from 10000
         )
       ]) as PinterestImage[];
 
-      // Close page early to free up memory
+      // Close page immediately after getting images
       await page.close();
       page = undefined;
 
@@ -289,8 +288,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         throw new Error('No images found on this Pinterest board. Please check if the board is public and contains images.');
       }
 
-      // Validate only first 6 images to stay within time limits
-      const imagesToValidate = images.slice(0, 6);
+      // Validate only first 4 images to reduce memory usage
+      const imagesToValidate = images.slice(0, 4); // Reduced from 6
       const validationPromises = imagesToValidate.map(async (img: PinterestImage) => {
         try {
           const isValid = await isValidImageUrl(img.url);
@@ -305,6 +304,12 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       if (filteredImages.length === 0) {
         throw new Error('Could not access any images from this board. Please check if the images are publicly accessible.');
+      }
+
+      // Close browser as soon as possible
+      if (browser) {
+        await browser.close();
+        browser = undefined;
       }
 
       return { 
