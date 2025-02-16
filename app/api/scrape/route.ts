@@ -44,6 +44,7 @@ interface PuppeteerPage {
   setUserAgent: (userAgent: string) => Promise<void>;
   goto: (url: string, options?: any) => Promise<any>;
   close: () => Promise<void>;
+  waitForSelector: (selector: string, options?: { timeout: number }) => Promise<any>;
 }
 
 // Update the browser return type
@@ -228,15 +229,20 @@ function validatePinterestUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
     // Accept both pin.it and pinterest domains
-    if (!urlObj.hostname.includes('pinterest.') && !urlObj.hostname.includes('pin.it')) {
+    const validDomains = ['pinterest.com', 'pinterest.ca', 'pin.it'];
+    const isValidDomain = validDomains.some(domain => urlObj.hostname.includes(domain));
+    
+    if (!isValidDomain) {
       return false;
     }
+    
     // For pin.it URLs, just verify basic structure
     if (urlObj.hostname.includes('pin.it')) {
       return true;
     }
-    // For full Pinterest URLs, check path structure
-    const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
+    
+    // For Pinterest boards, check for username/boardname pattern
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
     return pathParts.length >= 2;
   } catch (_e) {
     return false;
@@ -275,41 +281,76 @@ async function validateImages(images: PinterestImage[]): Promise<PinterestImage[
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const browser = await getBrowser();
+  let browser = null;
+  let page = null;
+  
   try {
     const { url } = await request.json();
     
     if (!validatePinterestUrl(url)) {
-      return NextResponse.json({ error: 'Invalid Pinterest URL' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Invalid Pinterest URL. Please provide a valid Pinterest board or pin URL.' },
+        { status: 400 }
+      );
     }
 
-    const page = await browser.newPage();
-    await page.setViewport({ width: 600, height: 800 });
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 });
+    // Expand short URLs if needed
+    const fullUrl = url.includes('pin.it') ? await expandShortUrl(url) : url;
+    
+    browser = await getBrowser();
+    page = await browser.newPage();
+    
+    // Set minimal viewport and timeout
+    await page.setViewport({ width: 800, height: 600 });
+    await page.setDefaultNavigationTimeout(15000);
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
+    
+    // Navigate with optimized settings
+    await page.goto(fullUrl, { 
+      waitUntil: 'domcontentloaded',  // Don't wait for full load
+      timeout: 15000
+    });
 
+    // Quick check for images with short timeout
+    try {
+      await page.waitForSelector('img[src*="pinimg.com"]', { timeout: 5000 });
+    } catch (_error) {
+      // Continue even if timeout - some images might still be there
+    }
+    
     const rawImages = await page.evaluate(extractImagesFromPage);
+    await page.close();
+    page = null;
     
     if (!rawImages || rawImages.length === 0) {
-      throw new Error('No images found on the page');
+      throw new Error('No images found on the Pinterest board');
     }
 
+    // Validate images in smaller batches
     const validatedImages = await validateImages(rawImages);
     
     if (validatedImages.length === 0) {
-      throw new Error('No valid images found');
+      throw new Error('No valid images found on the Pinterest board');
     }
 
-    return NextResponse.json({ images: validatedImages });
+    return NextResponse.json({
+      success: true,
+      images: validatedImages
+    });
+
   } catch (error) {
     console.error('Scraping error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to scrape Pinterest images' },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Failed to import from Pinterest. Please check the URL and try again.';
+      
+    return NextResponse.json({
+      success: false,
+      error: errorMessage
+    }, { status: 500 });
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    if (page) await page.close().catch(console.error);
+    if (browser) await browser.close().catch(console.error);
   }
 }
 

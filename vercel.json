@@ -6,9 +6,9 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "functions": {
-    "app/api/scrape/route.ts": {
+    "api/scrape": {
       "memory": 1024,
-      "maxDuration": 10
+      "maxDuration": 30
     }
   }
 } 
