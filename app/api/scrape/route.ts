@@ -375,7 +375,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 }
 
-function extractImagesFromPinterestHtml(html: string) {
+function _extractImagesFromPinterestHtml(html: string) {
   // Try multiple regex patterns to find image URLs
   const patterns = [
     /"orig":{"url":"([^"]+)"/g,
