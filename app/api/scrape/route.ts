@@ -9,9 +9,17 @@ export const runtime = 'nodejs';
 export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
 export const maxDuration = 60;
 
-// Configure Chromium with memory-optimized settings
+// Configure Chromium for Vercel environment
 chromium.setGraphicsMode = false;
 chromium.setHeadlessMode = true;
+chromium.args.push(
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--single-process',
+  '--no-zygote'
+);
 
 // Add proper type for page parameter
 interface PuppeteerPage {
@@ -90,30 +98,29 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
     const isDev = process.env.NODE_ENV === 'development';
     
-    // Get Chrome path from environment variable or use default paths
-    const defaultWindowsPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-    const defaultLinuxPath = '/usr/bin/google-chrome';
-    const customChromePath = process.env.CHROME_PATH;
+    let executablePath;
+    if (isDev) {
+      // In development, try to use local Chrome
+      const customChromePath = process.env.CHROME_PATH;
+      const defaultWindowsPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+      const defaultLinuxPath = '/usr/bin/google-chrome';
+      executablePath = customChromePath || 
+                      (process.platform === 'win32' ? defaultWindowsPath : defaultLinuxPath);
+    } else {
+      // In production (Vercel), always use @sparticuz/chromium
+      executablePath = await chromium.executablePath();
+    }
     
     const options = {
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote'
-      ],
+      args: chromium.args,
+      executablePath,
+      headless: true,
+      ignoreHTTPSErrors: true,
       defaultViewport: {
         width: 1920,
         height: 1080,
         deviceScaleFactor: 1,
-      },
-      executablePath: isDev 
-        ? customChromePath || (process.platform === 'win32' ? defaultWindowsPath : defaultLinuxPath)
-        : await chromium.executablePath(),
-      headless: true,
-      ignoreHTTPSErrors: true
+      }
     };
 
     const browser = await puppeteer.launch(options);
@@ -121,17 +128,15 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
   } catch (error: unknown) {
     console.error('Browser launch error:', error);
     
-    // Provide more helpful error message for common issues
     if (error instanceof Error) {
-      if (error.message.includes('not exist')) {
-        const helpMessage = process.platform === 'win32'
-          ? 'Chrome executable not found. Please ensure Google Chrome is installed in the default location (C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe), ' +
-            'or set CHROME_PATH environment variable to your Chrome executable path.'
-          : 'Chrome executable not found. Please ensure Google Chrome is installed, or set CHROME_PATH environment variable to your Chrome executable path.';
-        throw new Error(helpMessage);
+      // Provide more specific error message for Vercel environment
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`Failed to launch browser in production: ${error.message}`);
+      } else {
+        throw new Error(`Failed to launch browser in development. Please ensure Chrome is installed or set CHROME_PATH environment variable.`);
       }
     }
-    throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
   }
 }
 
