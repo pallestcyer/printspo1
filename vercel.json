@@ -6,9 +6,14 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "functions": {
-    "api/scrape": {
+    "app/api/scrape/route": {
       "memory": 1024,
       "maxDuration": 30
+    }
+  },
+  "build": {
+    "env": {
+      "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
     }
   }
 } 
