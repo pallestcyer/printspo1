@@ -15,26 +15,19 @@ const isVercel = process.env.VERCEL === '1';
 // Configure Chromium differently based on environment
 const chromiumConfig = {
   args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
+    ...chromium.args,
+    '--js-flags=--max-old-space-size=512',
+    '--memory-pressure-off',
     '--single-process',
     '--no-zygote',
-    '--js-flags=--max-old-space-size=384',
-    '--disable-extensions',
-    '--disable-component-extensions-with-background-pages',
-    '--disable-default-apps',
-    '--mute-audio',
-    '--no-default-browser-check',
-    '--no-experiments',
+    '--disable-gpu',
+    '--disable-dev-shm-usage',
+    '--disable-setuid-sandbox',
+    '--no-first-run',
+    '--no-sandbox',
     '--aggressive-cache-discard',
     '--disable-features=site-per-process',
-    '--disable-features=TranslateUI',
-    '--disable-features=BlinkGenPropertyTrees',
-    '--disable-javascript',
-    '--disable-images',
-    '--lite-mode'
+    '--js-flags="--expose-gc"'
   ]
 };
 
@@ -81,32 +74,24 @@ const _MAX_RETRIES = 3;
 const _RETRY_DELAY = 2000;
 
 const extractImagesFromPage = () => {
-  // Get all Pinterest images, filtering out avatars/profiles early
-  const images = document.querySelectorAll('img[src*="pinimg.com"]');
-  const results = [];
-  
-  for (const img of images) {
-    const imgElement = img as HTMLImageElement;
-    const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
-    
-    // Skip non-pin images early
-    if (url.includes('avatar') || url.includes('profile')) continue;
-    
-    // Get minimal required data
-    const pinLink = imgElement.closest('a[href*="/pin/"]') as HTMLAnchorElement;
-    const id = pinLink ? pinLink.href?.split('/pin/')[1]?.split('/')[0] : 
-               `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    results.push({
-      url,
-      alt: imgElement.alt || '',
-      width: 0, // We'll determine this when validating
-      height: 0,
-      id
-    });
-  }
-  
-  return results;
+  const images = Array.from(document.querySelectorAll('img[src*="pinimg.com"]'))
+    .slice(0, 50) // Limit initial collection
+    .map(img => {
+      const imgElement = img as HTMLImageElement;
+      const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
+      if (url.includes('avatar') || url.includes('profile')) return null;
+      
+      const pinLink = imgElement.closest('a[href*="/pin/"]') as HTMLAnchorElement;
+      const id = pinLink?.href?.split('/pin/')[1]?.split('/')[0] || 
+                `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Remove element property before returning
+      const result = { url, alt: imgElement.alt || '', width: 0, height: 0, id };
+      return result;
+    })
+    .filter((img): img is PinterestImage => img !== null);
+
+  return images;
 };
 
 // Prefix unused function with underscore
@@ -291,41 +276,32 @@ function validatePinterestUrl(url: string): boolean {
   }
 }
 
-// Modify validation to handle more images efficiently
+// Update error variable name to match convention
 async function validateImages(images: PinterestImage[]): Promise<PinterestImage[]> {
+  const batchSize = 5;
   const validatedImages: PinterestImage[] = [];
-  const batchSize = 4; // Validate in small batches to manage memory
   
-  // First validate a small batch quickly for initial display
-  const initialBatch = images.slice(0, batchSize);
-  for (const img of initialBatch) {
-    try {
-      const isValid = await isValidImageUrl(img.url);
-      if (isValid) {
-        validatedImages.push(img);
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  // Then validate the rest in batches
-  if (images.length > batchSize) {
-    const remaining = images.slice(batchSize);
-    for (let i = 0; i < remaining.length; i += batchSize) {
-      const batch = remaining.slice(i, i + batchSize);
-      const batchPromises = batch.map(async (img) => {
+  for (let i = 0; i < images.length; i += batchSize) {
+    const batch = images.slice(i, Math.min(i + batchSize, images.length));
+    const validBatch = await Promise.all(
+      batch.map(async img => {
         try {
-          const isValid = await isValidImageUrl(img.url);
-          return isValid ? img : null;
-        } catch {
+          return await isValidImageUrl(img.url) ? img : null;
+        } catch (_error) {
           return null;
         }
-      });
-      
-      const validBatch = (await Promise.all(batchPromises)).filter((img): img is PinterestImage => img !== null);
-      validatedImages.push(...validBatch);
-    }
+      })
+    );
+    
+    // Fix type error by explicitly typing the filter operation
+    const filteredBatch = validBatch.filter((img): img is PinterestImage => img !== null);
+    validatedImages.push(...filteredBatch);
+    
+    // Force garbage collection if available
+    if (global.gc) global.gc();
+    
+    // Small delay between batches
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
   
   return validatedImages;
