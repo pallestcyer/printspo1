@@ -7,6 +7,10 @@ export const runtime = 'nodejs';
 export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
 export const maxDuration = 60;
 
+// Configure Chromium
+chromium.setGraphicsMode = false;
+chromium.setHeadlessMode = true;
+
 // Add proper type for page parameter
 interface PuppeteerPage {
   evaluate: (fn: () => any) => Promise<any>;
@@ -88,19 +92,22 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
       }) as PuppeteerBrowser;
     } else {
       // In production (Vercel), use @sparticuz/chromium
-      await chromium.font('https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf');
-      
-      return await puppeteer.launch({
+      const options = {
         args: chromium.args,
+        executablePath: process.env.CHROME_BIN || await chromium.executablePath('/tmp/chromium'),
+        headless: true,
         defaultViewport: {
           width: 1920,
           height: 1080,
           deviceScaleFactor: 1,
         },
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
         ignoreHTTPSErrors: true,
-      }) as PuppeteerBrowser;
+      };
+
+      // Initialize Chromium
+      await chromium.font('https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf');
+      const browser = await puppeteer.launch(options);
+      return browser as PuppeteerBrowser;
     }
   } catch (error) {
     console.error('Browser launch error:', error);
