@@ -278,43 +278,38 @@ export async function POST(request: Request): Promise<NextResponse> {
   const browser = await getBrowser();
   try {
     const { url } = await request.json();
-    const page = await browser.newPage();
     
+    if (!validatePinterestUrl(url)) {
+      return NextResponse.json({ error: 'Invalid Pinterest URL' }, { status: 400 });
+    }
+
+    const page = await browser.newPage();
     await page.setViewport({ width: 600, height: 800 });
     await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 });
 
-    const images = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('img[src*="pinimg.com"]'))
-        .slice(0, 50)
-        .map(img => {
-          const imgElement = img as HTMLImageElement;
-          const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
-          if (url.includes('avatar') || url.includes('profile')) return null;
-          
-          const pinLink = imgElement.closest('a[href*="/pin/"]') as HTMLAnchorElement;
-          const id = pinLink?.href?.split('/pin/')[1]?.split('/')[0] || 
-                    `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          
-          return {
-            url,
-            alt: imgElement.alt || '',
-            width: 1200,
-            height: 1200,
-            id
-          };
-        })
-        .filter(Boolean);
-    });
+    const rawImages = await page.evaluate(extractImagesFromPage);
+    
+    if (!rawImages || rawImages.length === 0) {
+      throw new Error('No images found on the page');
+    }
 
-    return NextResponse.json({ images });
+    const validatedImages = await validateImages(rawImages);
+    
+    if (validatedImages.length === 0) {
+      throw new Error('No valid images found');
+    }
+
+    return NextResponse.json({ images: validatedImages });
   } catch (error) {
     console.error('Scraping error:', error);
     return NextResponse.json(
-      { error: 'Failed to scrape Pinterest images' },
+      { error: error instanceof Error ? error.message : 'Failed to scrape Pinterest images' },
       { status: 500 }
     );
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 
