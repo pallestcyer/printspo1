@@ -96,25 +96,21 @@ async function ensureChromiumInTemp(): Promise<string> {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
-    const isDev = process.env.NODE_ENV === 'development';
-    
-    let executablePath;
-    if (isDev) {
-      // In development, try to use local Chrome
-      const customChromePath = process.env.CHROME_PATH;
-      const defaultWindowsPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-      const defaultLinuxPath = '/usr/bin/google-chrome';
-      executablePath = customChromePath || 
-                      (process.platform === 'win32' ? defaultWindowsPath : defaultLinuxPath);
-    } else {
-      // In production (Vercel), always use @sparticuz/chromium
-      executablePath = await chromium.executablePath();
-    }
+    const executablePath = await chromium.executablePath();
     
     const options = {
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-setuid-sandbox',
+        '--no-first-run',
+        '--no-sandbox',
+        '--no-zygote',
+        '--single-process',
+      ],
       executablePath,
-      headless: true,
+      headless: chromium.headless,
       ignoreHTTPSErrors: true,
       defaultViewport: {
         width: 1920,
@@ -129,12 +125,7 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
     console.error('Browser launch error:', error);
     
     if (error instanceof Error) {
-      // Provide more specific error message for Vercel environment
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error(`Failed to launch browser in production: ${error.message}`);
-      } else {
-        throw new Error(`Failed to launch browser in development. Please ensure Chrome is installed or set CHROME_PATH environment variable.`);
-      }
+      throw new Error(`Failed to launch browser in production: ${error.message}`);
     }
     throw error;
   }

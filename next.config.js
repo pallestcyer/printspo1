@@ -32,8 +32,7 @@ const nextConfig = {
       ];
     },
     experimental: {
-      serverActions: true,
-      esmExternals: 'loose'
+      serverComponentsExternalPackages: ['puppeteer-core']
     },
     reactStrictMode: true,
     images: {
