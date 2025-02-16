@@ -4,7 +4,7 @@ import chromium from '@sparticuz/chromium';
 
 // Configure route options
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 // Add proper type for page parameter
 interface PuppeteerPage {
@@ -58,40 +58,69 @@ const extractImagesFromPage = () => {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
-    await chromium.font('https://raw.githubusercontent.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
-    
-    return puppeteer.launch({
+    // Properly configure chromium for serverless
+    const executablePath = await chromium.executablePath();
+
+    const browser = await puppeteer.launch({
       args: [
         ...chromium.args,
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--hide-scrollbars',
+        '--disable-extensions',
+        '--force-color-profile=srgb',
+        '--font-render-hinting=none',
+        '--js-flags=--max-old-space-size=460', // Limit heap size
+        '--memory-pressure-off',
+        '--single-process' // Reduce memory usage
       ],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      defaultViewport: {
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 1,
+      },
+      executablePath,
+      headless: true,
       ignoreHTTPSErrors: true,
-    }) as Promise<PuppeteerBrowser>;
+    });
+
+    return browser as PuppeteerBrowser;
   } catch (error) {
     console.error('Browser launch error:', error);
-    throw new Error('Failed to launch browser');
+    throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+// Add timeout wrapper for fetch operations
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
   }
 }
 
 async function isValidImageUrl(url: string): Promise<boolean> {
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'HEAD',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0',
         'Referer': 'https://www.pinterest.com/'
       }
-    });
+    }, 5000);
     
     if (!response.ok) return false;
     const contentType = response.headers.get('content-type');
@@ -120,7 +149,7 @@ async function autoScroll(page: PuppeteerPage): Promise<void> {
   });
 }
 
-function _isValidPinterestBoardUrl(url: string): boolean {
+function validatePinterestUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
     if (!urlObj.hostname.includes('pinterest.')) {
@@ -134,7 +163,9 @@ function _isValidPinterestBoardUrl(url: string): boolean {
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
-  let browser;
+  let browser: PuppeteerBrowser | undefined;
+  let page: PuppeteerPage | undefined;
+  
   try {
     const { url } = await req.json();
     
@@ -142,69 +173,116 @@ export async function POST(req: Request): Promise<NextResponse> {
       return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
     }
 
-    if (!url.includes('pinterest.')) {
-      return NextResponse.json({ error: 'Invalid Pinterest URL' }, { status: 400 });
+    if (!validatePinterestUrl(url)) {
+      return NextResponse.json({ error: 'Invalid Pinterest URL. Please make sure you\'re using a valid Pinterest board URL.' }, { status: 400 });
     }
 
-    browser = await getBrowser();
-    const page = await browser.newPage();
-    
-    // Configure page settings
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setDefaultNavigationTimeout(30000);
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
-
-    // Navigate to the page
-    await page.goto(url, { 
-      waitUntil: 'networkidle0',
-      timeout: 60000
+    // Add global timeout for the entire operation
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Operation timed out')), 55000); // 55s to allow for cleanup
     });
 
-    // Extract images
-    const images = await page.evaluate(extractImagesFromPage);
+    const scrapePromise = async () => {
+      browser = await getBrowser();
+      page = await browser.newPage();
+      
+      // Configure page settings
+      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setDefaultNavigationTimeout(25000);
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
 
-    // Close browser before validation to free up memory
-    await browser.close();
-    browser = undefined;
+      // Navigate to the page with better error handling
+      try {
+        await page.goto(url, { 
+          waitUntil: 'domcontentloaded',
+          timeout: 25000
+        });
+      } catch (error) {
+        throw new Error('Failed to load Pinterest board. Please check if the board is public and try again.');
+      }
 
-    // Validate images
-    const validatedImages = await Promise.all(
-      images.map(async (img: PinterestImage) => {
-        const isValid = await isValidImageUrl(img.url);
-        return isValid ? img : null;
-      })
-    );
+      // Extract images with timeout and memory cleanup
+      const images = await Promise.race([
+        page.evaluate(extractImagesFromPage).then(async (imgs) => {
+          // Clean up page after extraction
+          if (page) {
+            await page.close();
+            page = undefined;
+          }
+          return imgs;
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Image extraction timed out')), 20000)
+        )
+      ]) as PinterestImage[];
 
-    const filteredImages = validatedImages.filter((img): img is PinterestImage => img !== null);
+      // Close browser and page after extraction
+      if (page) await page.close();
+      if (browser) {
+        await browser.close();
+        browser = undefined;
+      }
 
-    if (filteredImages.length === 0) {
-      return NextResponse.json(
-        { error: 'No valid Pinterest images found. Please check if the board is public and try again.' },
-        { status: 400 }
-      );
-    }
+      if (!images || images.length === 0) {
+        return NextResponse.json(
+          { error: 'No images found on this Pinterest board. Please check if the board is public and contains images.' },
+          { status: 400 }
+        );
+      }
 
-    return NextResponse.json({ 
-      images: filteredImages,
-      total: filteredImages.length
-    });
+      // Validate first few images only to stay within time limit
+      const imagesToValidate = images.slice(0, 12);
+      const validationPromises = imagesToValidate.map(async (img: PinterestImage) => {
+        try {
+          const isValid = await isValidImageUrl(img.url);
+          return isValid ? img : null;
+        } catch {
+          return null;
+        }
+      });
+
+      // Add timeout for the entire validation process
+      const validatedImages = await Promise.race([
+        Promise.all(validationPromises),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Image validation timed out')), 10000)
+        )
+      ]) as (PinterestImage | null)[];
+
+      const filteredImages = validatedImages.filter((img): img is PinterestImage => img !== null);
+
+      if (filteredImages.length === 0) {
+        return NextResponse.json(
+          { error: 'Could not access any images from this board. Please check if the images are publicly accessible.' },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ 
+        images: filteredImages,
+        total: filteredImages.length
+      });
+    };
+
+    // Race between the scraping operation and the global timeout
+    return await Promise.race([scrapePromise(), timeoutPromise]) as NextResponse;
 
   } catch (error) {
     console.error('Error scraping Pinterest:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to scrape Pinterest board',
+        error: 'Failed to import from Pinterest. Please check the URL and try again.',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
   } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (error) {
-        console.error('Error closing browser:', error);
-      }
+    // Ensure everything is cleaned up
+    try {
+      if (page) await page.close();
+      if (browser) await browser.close();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
     }
   }
 }
