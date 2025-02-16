@@ -9,28 +9,42 @@ export const runtime = 'nodejs';
 export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
 export const maxDuration = 60;
 
-// Configure Chromium for Vercel environment with memory optimization
-chromium.setGraphicsMode = false;
-chromium.setHeadlessMode = true;
-chromium.args.push(
-  '--no-sandbox',
-  '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',
-  '--disable-gpu',
-  '--single-process',
-  '--no-zygote',
-  '--js-flags=--max-old-space-size=460', // Limit JS heap
-  '--disable-extensions',
-  '--disable-component-extensions-with-background-pages',
-  '--disable-default-apps',
-  '--mute-audio',
-  '--no-default-browser-check',
-  '--no-experiments',
-  '--aggressive-cache-discard',
-  '--disable-features=site-per-process',
-  '--disable-features=TranslateUI',
-  '--disable-features=BlinkGenPropertyTrees'
-);
+// Determine environment
+const isVercel = process.env.VERCEL === '1';
+
+// Configure Chromium differently based on environment
+const chromiumConfig = {
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--single-process',
+    '--no-zygote',
+    '--js-flags=--max-old-space-size=384',
+    '--disable-extensions',
+    '--disable-component-extensions-with-background-pages',
+    '--disable-default-apps',
+    '--mute-audio',
+    '--no-default-browser-check',
+    '--no-experiments',
+    '--aggressive-cache-discard',
+    '--disable-features=site-per-process',
+    '--disable-features=TranslateUI',
+    '--disable-features=BlinkGenPropertyTrees'
+  ]
+};
+
+if (isVercel) {
+  // Additional Vercel-specific optimizations
+  chromiumConfig.args.push(
+    '--disable-javascript',
+    '--disable-images',
+    '--lite-mode'
+  );
+  chromium.setGraphicsMode = false;
+  chromium.setHeadlessMode = true;
+}
 
 // Add proper type for page parameter
 interface PuppeteerPage {
@@ -70,17 +84,32 @@ const _MAX_RETRIES = 3;
 const _RETRY_DELAY = 2000;
 
 const extractImagesFromPage = () => {
+  // Get all Pinterest images, filtering out avatars/profiles early
   const images = document.querySelectorAll('img[src*="pinimg.com"]');
-  return Array.from(images, (img: Element) => ({
-    url: (img as HTMLImageElement).src.replace(/\/\d+x\//, '/originals/'),
-    alt: (img as HTMLImageElement).alt || '',
-    width: (img as HTMLImageElement).naturalWidth || parseInt((img as HTMLImageElement).getAttribute('width') || '0'),
-    height: (img as HTMLImageElement).naturalHeight || parseInt((img as HTMLImageElement).getAttribute('height') || '0'),
-    id: (img as HTMLImageElement).closest('a[href*="/pin/"]') instanceof HTMLAnchorElement 
-        ? ((img as HTMLImageElement).closest('a[href*="/pin/"]') as HTMLAnchorElement).href?.split('/pin/')[1]?.split('/')[0]
-        || `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        : `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  })).filter(img => img.width >= 200 && !img.url.includes('avatar') && !img.url.includes('profile'));
+  const results = [];
+  
+  for (const img of images) {
+    const imgElement = img as HTMLImageElement;
+    const url = imgElement.src.replace(/\/\d+x\//, '/originals/');
+    
+    // Skip non-pin images early
+    if (url.includes('avatar') || url.includes('profile')) continue;
+    
+    // Get minimal required data
+    const pinLink = imgElement.closest('a[href*="/pin/"]') as HTMLAnchorElement;
+    const id = pinLink ? pinLink.href?.split('/pin/')[1]?.split('/')[0] : 
+               `pin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    results.push({
+      url,
+      alt: imgElement.alt || '',
+      width: 0, // We'll determine this when validating
+      height: 0,
+      id
+    });
+  }
+  
+  return results;
 };
 
 // Prefix unused function with underscore
@@ -109,29 +138,68 @@ async function _ensureChromiumInTemp(): Promise<string> {
 
 async function getBrowser(): Promise<PuppeteerBrowser> {
   try {
-    const executablePath = await chromium.executablePath();
-    
-    const options = {
-      args: chromium.args,
-      executablePath,
+    let executablePath: string | undefined;
+    const options: any = {
+      args: chromiumConfig.args,
       defaultViewport: {
-        width: 800, // Reduced from 1920
-        height: 600, // Reduced from 1080
+        width: 600,
+        height: 800,
         deviceScaleFactor: 1,
       },
       headless: true,
       ignoreHTTPSErrors: true,
-      protocolTimeout: 30000
+      protocolTimeout: 15000
     };
 
+    if (isVercel) {
+      // Use @sparticuz/chromium on Vercel
+      executablePath = await chromium.executablePath();
+    } else {
+      // In local development, try to use locally installed Chrome/Chromium
+      if (process.platform === 'win32') {
+        // Windows paths
+        const possiblePaths = [
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          process.env.CHROME_PATH // Allow custom path via env variable
+        ].filter(Boolean);
+
+        for (const path of possiblePaths) {
+          if (path && fs.existsSync(path)) {
+            executablePath = path;
+            break;
+          }
+        }
+      } else {
+        // Linux/Mac paths (for completeness)
+        const possiblePaths = [
+          '/usr/bin/google-chrome',
+          '/usr/bin/chromium-browser',
+          process.env.CHROME_PATH
+        ].filter(Boolean);
+
+        for (const path of possiblePaths) {
+          if (path && fs.existsSync(path)) {
+            executablePath = path;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!executablePath) {
+      throw new Error('Chrome not found. Please install Google Chrome or set CHROME_PATH environment variable.');
+    }
+
+    options.executablePath = executablePath;
     const browser = await puppeteer.launch(options);
     return browser as PuppeteerBrowser;
-  } catch (error: unknown) {
-    console.error('Browser launch error:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to launch browser: ${error.message}`);
+  } catch (_browserError: unknown) {
+    console.error('Browser launch error:', _browserError);
+    if (_browserError instanceof Error) {
+      throw new Error(`Failed to launch browser: ${_browserError.message}`);
     }
-    throw error;
+    throw _browserError;
   }
 }
 
@@ -226,6 +294,46 @@ function validatePinterestUrl(url: string): boolean {
   }
 }
 
+// Modify validation to handle more images efficiently
+async function validateImages(images: PinterestImage[]): Promise<PinterestImage[]> {
+  const validatedImages: PinterestImage[] = [];
+  const batchSize = 4; // Validate in small batches to manage memory
+  
+  // First validate a small batch quickly for initial display
+  const initialBatch = images.slice(0, batchSize);
+  for (const img of initialBatch) {
+    try {
+      const isValid = await isValidImageUrl(img.url);
+      if (isValid) {
+        validatedImages.push(img);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Then validate the rest in batches
+  if (images.length > batchSize) {
+    const remaining = images.slice(batchSize);
+    for (let i = 0; i < remaining.length; i += batchSize) {
+      const batch = remaining.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (img) => {
+        try {
+          const isValid = await isValidImageUrl(img.url);
+          return isValid ? img : null;
+        } catch {
+          return null;
+        }
+      });
+      
+      const validBatch = (await Promise.all(batchPromises)).filter((img): img is PinterestImage => img !== null);
+      validatedImages.push(...validBatch);
+    }
+  }
+  
+  return validatedImages;
+}
+
 export async function POST(req: Request): Promise<NextResponse> {
   let browser: PuppeteerBrowser | undefined;
   let page: PuppeteerPage | undefined;
@@ -243,16 +351,16 @@ export async function POST(req: Request): Promise<NextResponse> {
       }, { status: 400 });
     }
 
-    // Reduced timeout to save memory
+    // Even shorter timeout
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Operation timed out')), 25000); // Reduced from 50000
+      setTimeout(() => reject(new Error('Operation timed out')), 20000);
     });
 
     const scrapePromise = async () => {
       browser = await getBrowser();
       page = await browser.newPage();
       
-      await page.setDefaultNavigationTimeout(10000); // Reduced from 15000
+      await page.setDefaultNavigationTimeout(8000);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0');
 
       let expandedUrl = inputUrl;
@@ -266,8 +374,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 
       try {
         await page.goto(expandedUrl, { 
-          waitUntil: 'domcontentloaded', // Using domcontentloaded instead of load to save memory
-          timeout: 10000 // Reduced from 15000
+          waitUntil: 'domcontentloaded',
+          timeout: 8000
         });
       } catch (_navigationError) {
         throw new Error('Failed to load Pinterest board. Please check if the board is public and try again.');
@@ -276,45 +384,30 @@ export async function POST(req: Request): Promise<NextResponse> {
       const images = await Promise.race([
         page.evaluate(extractImagesFromPage),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Image extraction timed out')), 5000) // Reduced from 10000
+          setTimeout(() => reject(new Error('Image extraction timed out')), 6000) // Increased slightly for more images
         )
       ]) as PinterestImage[];
 
-      // Close page immediately after getting images
+      // Close browser immediately after getting images
       await page.close();
+      await browser.close();
       page = undefined;
+      browser = undefined;
 
       if (!images || images.length === 0) {
         throw new Error('No images found on this Pinterest board. Please check if the board is public and contains images.');
       }
 
-      // Validate only first 4 images to reduce memory usage
-      const imagesToValidate = images.slice(0, 4); // Reduced from 6
-      const validationPromises = imagesToValidate.map(async (img: PinterestImage) => {
-        try {
-          const isValid = await isValidImageUrl(img.url);
-          return isValid ? img : null;
-        } catch (_error) {
-          return null;
-        }
-      });
+      // Validate all images in batches
+      const validatedImages = await validateImages(images);
 
-      const validatedImages = await Promise.all(validationPromises);
-      const filteredImages = validatedImages.filter((img): img is PinterestImage => img !== null);
-
-      if (filteredImages.length === 0) {
+      if (validatedImages.length === 0) {
         throw new Error('Could not access any images from this board. Please check if the images are publicly accessible.');
       }
 
-      // Close browser as soon as possible
-      if (browser) {
-        await browser.close();
-        browser = undefined;
-      }
-
       return { 
-        images: filteredImages,
-        total: filteredImages.length
+        images: validatedImages,
+        total: validatedImages.length
       };
     };
 
@@ -334,8 +427,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     try {
       if (page) await page.close();
       if (browser) await browser.close();
-    } catch (error) {
-      console.error('Error during cleanup:', error);
+    } catch (_cleanupError) {
+      console.error('Error during cleanup:', _cleanupError);
     }
   }
 }
