@@ -4,6 +4,7 @@ import chromium from '@sparticuz/chromium';
 
 // Configure route options
 export const runtime = 'nodejs';
+export const preferredRegion = 'iad1'; // Use US East (N. Virginia) for better performance
 export const maxDuration = 60;
 
 // Add proper type for page parameter
@@ -86,32 +87,18 @@ async function getBrowser(): Promise<PuppeteerBrowser> {
         ignoreHTTPSErrors: true,
       }) as PuppeteerBrowser;
     } else {
-      // In production, use @sparticuz/chromium
-      const executablePath = await chromium.executablePath();
+      // In production (Vercel), use @sparticuz/chromium
+      await chromium.font('https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf');
       
       return await puppeteer.launch({
-        args: [
-          ...chromium.args,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--hide-scrollbars',
-          '--disable-extensions',
-          '--force-color-profile=srgb',
-          '--font-render-hinting=none',
-          '--js-flags=--max-old-space-size=460',
-          '--memory-pressure-off',
-          '--single-process'
-        ],
+        args: chromium.args,
         defaultViewport: {
           width: 1920,
           height: 1080,
           deviceScaleFactor: 1,
         },
-        executablePath,
-        headless: true,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
         ignoreHTTPSErrors: true,
       }) as PuppeteerBrowser;
     }
