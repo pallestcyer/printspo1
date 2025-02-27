@@ -16,8 +16,49 @@ const taviraj = Taviraj({
 });
 
 export const metadata: Metadata = {
-  title: 'Printspo - Turn Pinterest Boards into High-Quality Prints',
-  description: 'Create beautiful prints from your Pinterest boards instantly. Perfect for mood boards, presentations, and inspiration walls.',
+  metadataBase: new URL(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'),
+  title: 'Printspo',
+  description: 'Create beautiful print layouts from your Pinterest boards',
+  icons: {
+    icon: [
+      {
+        url: '/favicon.ico',
+        sizes: '32x32',
+        type: 'image/x-icon',
+      },
+      {
+        url: '/icon.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+    ],
+    apple: [
+      {
+        url: '/apple-icon.png',
+        sizes: '180x180',
+        type: 'image/png',
+      },
+    ],
+  },
+  manifest: '/site.webmanifest',
+  themeColor: '#D4A5A5',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Printspo',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_CA',
+    url: 'https://printspo.com',
+    title: 'Printspo - Turn Pinterest Boards into High-Quality Prints',
+    description: 'Create beautiful prints from your Pinterest boards instantly. Perfect for mood boards, presentations, and inspiration walls.',
+    siteName: 'Printspo',
+  },
 };
 
 export default function RootLayout({

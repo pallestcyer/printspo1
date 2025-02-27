@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import type { PrintSize, ScrapedImage } from '@/app/types';
 
-interface _DragItem {
-  _index: number;
+interface DragItem {
+  index: number;
   type: string;
 }
 
@@ -45,10 +45,8 @@ interface DraggableImageProps {
     rotation?: number;
   };
   index: number;
-  onDrop: (sourceIndex: number, targetIndex: number) => void;
+  onDrop: (dragIndex: number, hoverIndex: number) => void;
   onRemove: (index: number) => void;
-  isDragging?: boolean;
-  _setIsDragging?: (isDragging: boolean) => void;
   cornerRounding: number;
   containMode: boolean;
 }
@@ -77,22 +75,51 @@ const useDragDropImage = (index: number, onDrop: (dragIndex: number, dropIndex: 
 };
 
 // Separate component for draggable image
-const DraggableImage = ({
-  image,
-  index,
-  onDrop,
-  onRemove,
-  isDragging,
-  _setIsDragging,
-  cornerRounding,
-  containMode
-}: DraggableImageProps) => {
-  const { isOver, drop: dropRef } = useDragDropImage(index, onDrop);
+const DraggableImage = ({ image, index, onDrop, onRemove, cornerRounding, containMode }: DraggableImageProps) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  const [{ isDragging }, drag] = useDrag({
+    type: 'IMAGE',
+    item: { index },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  const [{ isOver }, drop] = useDrop({
+    accept: 'IMAGE',
+    hover(item: DragItem) {
+      if (!ref.current) {
+        return;
+      }
+      const dragIndex = item.index;
+      const hoverIndex = index;
+
+      // Don't replace items with themselves
+      if (dragIndex === hoverIndex) {
+        return;
+      }
+
+      // Time to actually perform the action
+      onDrop(dragIndex, hoverIndex);
+
+      // Note: we're mutating the monitor item here!
+      // Generally it's better to avoid mutations,
+      // but it's good here for the sake of performance
+      // to avoid expensive index searches.
+      item.index = hoverIndex;
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+    }),
+  });
+
+  drag(drop(ref));
 
   return (
     <div
-      ref={dropRef}
-      className={`relative overflow-hidden group ${isDragging ? 'opacity-50' : ''} ${isOver ? 'border-2 border-blue-500' : ''}`}
+      ref={ref}
+      className={`relative overflow-hidden group cursor-move ${isDragging ? 'opacity-50' : ''} ${isOver ? 'ring-2 ring-blue-400' : ''}`}
       style={{ 
         borderRadius: `${Math.min(cornerRounding * 2, 24)}px`
       }}
@@ -189,6 +216,16 @@ export function PrintBoardPreview({
   const { cols, rows } = getGridConfig(layout?.images?.length || images.length);
   const displayImages = layout?.images || images;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      // Do whatever you were trying to do with containerRef.current
+      // For example, if you were trying to set a class:
+      containerRef.current.classList.add('some-class');
+    }
+  }, []);
+
   return (
     <div className="flex justify-center">
       <div className="relative" style={{ width: `${width}px`, height: `${height}px` }}>
@@ -201,6 +238,7 @@ export function PrintBoardPreview({
             gap: `${spacing}rem`,
             padding: `${spacing}rem`,
           }}
+          ref={containerRef}
         >
           {displayImages.map((image, imageIndex) => (
             <DraggableImage

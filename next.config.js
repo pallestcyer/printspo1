@@ -2,20 +2,24 @@
 const nextConfig = {
     transpilePackages: ['puppeteer-core'],
     webpack: (config, { isServer }) => {
+      // Handle ESM modules
+      config.resolve.extensionAlias = {
+        '.js': ['.js', '.ts', '.tsx']
+      };
+
+      // Suppress punycode warning
+      config.ignoreWarnings = [
+        { module: /node_modules\/punycode/ }
+      ];
+
       if (isServer) {
+        // Ignore source maps
         config.module.rules.push({
           test: /\.map$/,
           use: ['ignore-loader']
         });
       }
-      // Handle ESM modules
-      config.resolve.extensionAlias = {
-        '.js': ['.js', '.ts', '.tsx']
-      };
-      // Suppress punycode warning
-      config.ignoreWarnings = [
-        { module: /node_modules\/punycode/ }
-      ];
+
       return config;
     },
     async headers() {
@@ -44,8 +48,8 @@ const nextConfig = {
       ],
     },
     env: {
-      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
     }
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

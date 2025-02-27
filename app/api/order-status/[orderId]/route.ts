@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: { orderId?: string } }
+) {
   try {
-    const url = new URL(request.url);
-    const orderId = url.searchParams.get('orderId');
+    const orderId = params.orderId;
 
     if (!orderId) {
       return NextResponse.json(

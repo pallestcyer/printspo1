@@ -20,6 +20,8 @@ interface GenerateRequest {
   printSize: PrintSize;
   spacing: number;
   containMode?: boolean;
+  cornerRounding?: number;
+  isPortrait?: boolean;
   isPreview?: boolean;
 }
 
@@ -34,29 +36,29 @@ export async function POST(req: Request) {
   try {
     console.log('Starting print generation...');
     const body = await req.json();
-    console.log('Request body:', JSON.stringify(body, null, 2));
     
-    const { images, printSize, spacing, containMode = false, isPreview = false }: GenerateRequest = body;
+    const { images, printSize, spacing, containMode = false, cornerRounding = 0, isPortrait = false, isPreview = false }: GenerateRequest = body;
     
     if (!images?.length) {
       return NextResponse.json({ error: 'No images provided' }, { status: 400 });
     }
 
-    const dpi = isPreview ? 150 : 200;
-    console.log('Using DPI:', dpi);
+    // Calculate dimensions based on print size aspect ratio
+    const baseWidth = 700;
+    const baseHeight = 500;
     
-    const paddingRem = 1;
-    const paddingInches = paddingRem * 0.0625;
-    const paddingPx = Math.floor(paddingInches * dpi);
-    
-    const width = Math.floor(printSize.width * dpi) + (paddingPx * 2);
-    const height = Math.floor(printSize.height * dpi) + (paddingPx * 2);
-    
-    console.log('Canvas dimensions:', { width, height });
+    let width, height;
+    if (isPortrait) {
+      height = baseHeight;
+      width = Math.floor((printSize.width / printSize.height) * height);
+    } else {
+      width = baseWidth;
+      height = Math.floor((printSize.height / printSize.width) * width);
+    }
 
     // Calculate grid dimensions
     const imageCount = images.length;
-    let cols: number;
+    let cols: number = 1;  // Initialize with a default value
     switch (imageCount) {
       case 1: cols = 1; break;
       case 2: cols = 2; break;
@@ -66,10 +68,9 @@ export async function POST(req: Request) {
     }
     const rows = Math.ceil(imageCount / cols);
     
-    const spacingPx = Math.floor(spacing * 0.0625 * dpi);
-    
-    const cellWidth = Math.floor((width - (paddingPx * 2) - (spacingPx * (cols - 1))) / cols);
-    const cellHeight = Math.floor((height - (paddingPx * 2) - (spacingPx * (rows - 1))) / rows);
+    const spacingPx = Math.floor(spacing * 16);
+    const cellWidth = Math.floor((width - (spacingPx * (cols + 1))) / cols);
+    const cellHeight = Math.floor((height - (spacingPx * (rows + 1))) / rows);
 
     // Generate the composite image
     const compositeImage = await sharp({
@@ -82,108 +83,98 @@ export async function POST(req: Request) {
     })
     .composite(await Promise.all(images.map(async (image: PrintImage, index: number) => {
       try {
-        console.log(`Processing image ${index + 1}:`, image.url);
-        const response = await fetch(image.url);
-        if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-        
+        const response = await fetch(image.url, {
+          headers: {
+            'Accept': 'image/*'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.statusText}`);
+        }
+
         const buffer = Buffer.from(await response.arrayBuffer());
         const row = Math.floor(index / cols);
         const col = index % cols;
-        
-        let imageWidth = cellWidth;
-        let imageHeight = cellHeight;
-        
-        if (imageCount === 5 && index === 0) {
-          imageWidth = cellWidth * 2 + spacingPx;
-        } else if (imageCount === 7 && index === 0) {
-          imageWidth = cellWidth * 2 + spacingPx;
-          imageHeight = cellHeight * 2 + spacingPx;
-        }
 
-        const processedImage = await sharp(buffer)
+        // Process the image first
+        const processedImage = await sharp(buffer, { failOnError: false })
           .resize({
-            width: imageWidth,
-            height: imageHeight,
+            width: cellWidth,
+            height: cellHeight,
             fit: containMode ? 'contain' : 'cover',
             background: { r: 255, g: 255, b: 255, alpha: 1 }
           })
-          .rotate(image.rotation)
+          .rotate(image.rotation || 0)
+          .toFormat('png')
+          .toBuffer();
+
+        // Create rounded corner mask
+        const mask = Buffer.from(
+          `<svg><rect x="0" y="0" width="${cellWidth}" height="${cellHeight}" rx="${Math.min(cornerRounding * 2, 24)}" ry="${Math.min(cornerRounding * 2, 24)}" fill="white"/></svg>`
+        );
+
+        // Apply mask and ensure white background
+        const finalImage = await sharp(processedImage)
+          .composite([{
+            input: mask,
+            blend: 'dest-in'
+          }])
+          .extend({
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: { r: 255, g: 255, b: 255, alpha: 1 }
+          })
           .toBuffer();
 
         return {
-          input: processedImage,
-          top: paddingPx + (row * (cellHeight + spacingPx)),
-          left: paddingPx + (col * (cellWidth + spacingPx))
+          input: finalImage,
+          top: spacingPx + (row * (cellHeight + spacingPx)),
+          left: spacingPx + (col * (cellWidth + spacingPx))
         };
       } catch (error) {
         console.error(`Error processing image ${index + 1}:`, error);
-        throw error;
+        // Return a white placeholder with rounded corners
+        return {
+          input: await sharp({
+            create: {
+              width: cellWidth,
+              height: cellHeight,
+              channels: 4,
+              background: { r: 255, g: 255, b: 255, alpha: 1 }
+            }
+          }).toBuffer(),
+          top: spacingPx + (Math.floor(index / cols) * (cellHeight + spacingPx)),
+          left: spacingPx + ((index % cols) * (cellWidth + spacingPx))
+        };
       }
     })))
     .jpeg({ 
-      quality: isPreview ? 80 : 90,
-      chromaSubsampling: '4:4:4'
+      quality: isPreview ? 85 : 90,
+      chromaSubsampling: '4:4:4',
+      force: true
     })
     .toBuffer();
 
-    console.log('Uploading to Cloudinary...');
+    // Upload to Cloudinary
     const uploadResponse = await cloudinary.uploader.upload(
       `data:image/jpeg;base64,${compositeImage.toString('base64')}`,
-      {
-        folder: isPreview ? 'print-previews' : 'print-originals',
-        format: isPreview ? 'jpg' : 'pdf',
-        transformation: [
-          { dpr: "2.0" },
-          { quality: isPreview ? "auto:good" : "90" },
-          ...(!isPreview ? [{ flags: "attachment" }] : [])
-        ]
-      }
+      { folder: 'print-previews' }
     );
 
-    console.log('Upload response:', {
-      format: uploadResponse.format,
-      url: uploadResponse.secure_url,
-      resourceType: uploadResponse.resource_type
+    return NextResponse.json({
+      images: [{
+        previewUrl: uploadResponse.secure_url
+      }]
     });
 
-    if (isPreview) {
-      return NextResponse.json({
-        images: [{
-          printUrl: uploadResponse.secure_url,
-          previewUrl: uploadResponse.secure_url
-        }]
-      });
-    } else {
-      // For print files, ensure we're getting a PDF
-      if (uploadResponse.format !== 'pdf') {
-        throw new Error('Failed to generate PDF format');
-      }
-      
-      // Generate a separate preview JPG
-      const previewResponse = await cloudinary.uploader.upload(
-        `data:image/jpeg;base64,${compositeImage.toString('base64')}`,
-        {
-          folder: 'print-previews',
-          format: 'jpg',
-          transformation: [
-            { dpr: "2.0" },
-            { quality: "auto:good" }
-          ]
-        }
-      );
-
-      return NextResponse.json({
-        images: [{
-          printUrl: uploadResponse.secure_url,
-          previewUrl: previewResponse.secure_url
-        }]
-      });
-    }
   } catch (error) {
-    console.error('Generate route error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process images', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    console.error('Generate route error:', error instanceof Error ? error.message : 'Unknown error');
+    return NextResponse.json({
+      error: 'Failed to process images',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }

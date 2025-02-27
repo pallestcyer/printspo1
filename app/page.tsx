@@ -26,7 +26,7 @@ export default function Home() {
       <div className="container mx-auto px-4 py-4 max-w-5xl">
         <header className="text-center mb-4">
           <div className="inline-flex flex-col items-center">
-            <div className="w-24 h-24 mb-3">
+            <div className="w-24 h-24 mb-12">
               <Image
                 src="/PrintspoType.svg"
                 alt="Printspo Logo"
@@ -38,11 +38,11 @@ export default function Home() {
               />
             </div>
             <div className="relative">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-[#4D4D4D] mb-2 font-serif tracking-wide px-2">
-                <span className="font-[700]">Pins</span>{' '}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl text-[#4D4D4D] mb-2 font-serif tracking-wide px-2">
+                <span className="font-[700] italic">Pins</span>{' '}
                 <span className="font-[200] italic">to</span>{' '}
-                <span className="font-[700]">Prints</span>{' '}<br />
-                <span className="font-[600] italic text-[#D4A5A5]">– Instantly</span>
+                <span className="font-[700] italic">Prints</span>{' '}<br />
+                <span className="font-[600] text-[#D4A5A5]">– Instantly.</span>
               </h1>
               <div className="absolute -top-6 -right-6 sm:-top-8 sm:-right-8 w-10 sm:w-12">
                 <Image
@@ -58,7 +58,7 @@ export default function Home() {
               Turn Pinterest boards into high-quality prints.
             </p>
             <p className="text-sm sm:text-base text-gray-400 font-light">
-              Delivery within 2-3 business days Canada-wide.
+              Delivery within 3 business days Canada-wide.
             </p>
           </div>
         </header>

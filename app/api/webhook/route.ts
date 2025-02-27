@@ -9,7 +9,11 @@ import { OrderConfirmationEmail } from '@/components/emails/OrderConfirmationEma
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
 });
-const resend = new Resend(process.env.RESEND_API_KEY);
+
+const resend = process.env.RESEND_API_KEY 
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 // Configure route options
@@ -18,6 +22,12 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    // Check if Resend is configured
+    if (!resend) {
+      console.warn('Resend API key not configured, skipping email notification');
+      return NextResponse.json({ message: 'Webhook processed (email disabled)' });
+    }
+
     const body = await request.text();
     const headersList = headers();
     const signature = headersList.get('stripe-signature')!;
@@ -84,8 +94,8 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Webhook error:', error);
     return NextResponse.json(
-      { error: 'Webhook handler failed' },
-      { status: 400 }
+      { error: 'Webhook processing failed' },
+      { status: 500 }
     );
   }
 }

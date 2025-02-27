@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="#D4A5A5"/>
+  <!-- Letter P -->
+  <path d="M160 140V372M160 140H280C324.183 140 360 175.817 360 220V220C360 264.183 324.183 300 280 300H160" 
+        stroke="white" 
+        stroke-width="48" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+</svg> 
