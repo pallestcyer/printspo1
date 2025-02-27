@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } from 'react';
 import { Plus, X, ChevronLeft, ChevronRight, Loader2, Download } from 'lucide-react';
 import { PrintBoardPreview } from './PrintBoardPreview';
-import { ImageSelectionSection } from './ImageSelectionSection';
 import { PRINT_SIZES } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
@@ -10,8 +9,6 @@ import { type Board, ScrapedImage } from '@/app/types';
 import { cn } from '@/lib/utils';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { DraggableImage } from './DraggableImage';
-import update from 'immutability-helper';
 
 interface MultiBoardPreviewProps {
   isMultiMode: boolean;
@@ -79,8 +76,8 @@ const _generatePreview = async (board: Board) => {
 
     const data = await response.json();
     return data.url;
-  } catch (error) {
-    console.error('Preview generation error:', error);
+  } catch (_error) {
+    console.error('Preview generation error:', _error);
     throw new Error('Failed to generate preview. Please try again.');
   }
 };
@@ -92,7 +89,7 @@ export function MultiBoardPreview({
   _onBoardsChange,
   className 
 }: MultiBoardPreviewProps) {
-  const router = useRouter();
+  const _router = useRouter();
   const [boards, setBoards] = useState<EnhancedBoard[]>([{
     id: Date.now().toString(),
     url: '',
@@ -166,8 +163,8 @@ export function MultiBoardPreview({
           }
         }
       }
-    } catch (e) {
-      console.error('Failed to load boards:', e);
+    } catch (_e) {
+      console.error('Failed to load boards:', _e);
     }
   }, [onMultiModeChange]);
 
@@ -411,7 +408,7 @@ export function MultiBoardPreview({
     }
   };
 
-  const handlePreviewDownload = async (board: Board) => {
+  const _handlePreviewDownload = async (board: Board) => {
     try {
       const response = await fetch('/api/prints/generate', {
         method: 'POST',
@@ -594,11 +591,11 @@ export function MultiBoardPreview({
     setBoards(newBoards);
   };
 
-  const handleImageSelect = (boardId: string, imageUrl: string) => {
+  const _handleImageSelect = (boardId: string, imageUrl: string) => {
     _setSelectedImages(prev => [...prev, imageUrl]);
   };
 
-  const handleImageRemove = (boardId: string, imageUrl: string) => {
+  const _handleImageRemove = (boardId: string, imageUrl: string) => {
     _setSelectedImages(prev => prev.filter(url => url !== imageUrl));
   };
 
@@ -652,7 +649,7 @@ export function MultiBoardPreview({
     });
   }, [boards, activeBoardIndex]);
 
-  const handleBoardRemove = (boardId: string) => {
+  const _handleBoardRemove = (boardId: string) => {
     setBoards(prev => prev.filter(board => board.id !== boardId));
     _setSelectedImages(prev => prev.filter(url => !url.includes(boardId)));
   };

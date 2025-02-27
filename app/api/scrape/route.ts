@@ -260,11 +260,11 @@ const extractImagesFromPage = () => {
             });
           }
         });
-      } catch (e) {
+      } catch (_e) {
         // Silently ignore parsing errors
       }
     });
-  } catch (e) {
+  } catch (_e) {
     // Ignore JSON extraction errors
   }
   
@@ -291,7 +291,7 @@ const extractImagesFromPage = () => {
           }
         });
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore regex extraction errors
     }
   }
@@ -502,7 +502,7 @@ async function isValidImageUrl(url: string): Promise<boolean> {
     
     const contentType = response.headers.get('content-type');
     return contentType?.startsWith('image/') ?? false;
-  } catch (e) {
+  } catch (_e) {
     return false;
   }
 }
@@ -524,8 +524,8 @@ async function expandShortUrl(shortUrl: string): Promise<string> {
     
     clearTimeout(timeoutId);
     return response.url;
-  } catch (error) {
-    console.error('URL expansion error:', error);
+  } catch (_error) {
+    console.error('URL expansion error:', _error);
     throw new Error('Failed to expand shortened Pinterest URL');
   }
 }
@@ -606,8 +606,8 @@ async function validateImages(images: PinterestImage[]): Promise<PinterestImage[
           // Check if image URL is valid
           const isValid = await isValidImageUrl(finalUrl);
           return isValid ? { ...img, url: finalUrl } : null;
-        } catch (error) {
-          console.error('Image validation error:', error);
+        } catch (_error) {
+          console.error('Image validation error:', _error);
           return null;
         }
       })
@@ -802,11 +802,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       count: validatedImages.length
     });
 
-  } catch (error) {
-    console.error('Pinterest scraper error:', error);
+  } catch (_error) {
+    console.error('Pinterest scraper error:', _error);
     
-    const errorMessage = error instanceof Error 
-      ? `Failed to extract Pinterest images: ${error.message}`
+    const errorMessage = _error instanceof Error 
+      ? `Failed to extract Pinterest images: ${_error.message}`
       : 'Failed to import from Pinterest. Please check the URL and try again.';
       
     return NextResponse.json({
@@ -817,8 +817,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     try {
       if (page) await page.close().catch(() => {});
       if (browser) await browser.close().catch(() => {});
-    } catch (_e) {
-      console.error('Error during final cleanup:', _e);
+    } catch (_err) {
+      console.error('Error during final cleanup:', _err);
     }
   }
 }
@@ -840,7 +840,7 @@ function extractBoardName(url: string): string {
     }
     
     return 'Pinterest Board';
-  } catch (error) {
+  } catch (_error) {
     return 'Pinterest Board';
   }
 }

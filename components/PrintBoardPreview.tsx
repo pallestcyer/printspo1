@@ -52,7 +52,7 @@ interface DraggableImageProps {
 }
 
 // Custom hook for drag and drop functionality
-const useDragDropImage = (index: number, onDrop: (dragIndex: number, dropIndex: number) => void) => {
+const useDragDrop = (index: number, onDrop: (dragIndex: number, dropIndex: number) => void) => {
   const [{ isDragging }, drag] = useDrag({
     type: 'BOARD_IMAGE',
     item: { index },
