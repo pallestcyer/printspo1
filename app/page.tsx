@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { MultiBoardPreview } from '@/components/MultiBoardPreview';
+import MultiBoardPreview from '@/components/MultiBoardPreview';
 import Image from 'next/image';
 import DragDropProvider from '@/components/DndProvider';
 import { PRINT_SIZES } from '@/lib/constants';
