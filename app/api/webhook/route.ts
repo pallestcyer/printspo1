@@ -1,9 +1,10 @@
-import { type NextRequest } from 'next/server';
-import OrderConfirmationEmail from '@/components/emails/OrderConfirmationEmail';
-import { type Order, type ShippingAddress } from '@/app/types/order';
-import { getOrder } from '@/lib/stripe-helpers';
-import { sendEmail } from '@/lib/email';
+import { NextResponse, type NextRequest } from 'next/server';
+import { headers } from 'next/headers';
+import OrderConfirmationEmail from '../../../components/emails/OrderConfirmationEmail';
+import { getOrder } from '../../../lib/stripe-helpers';
+import { sendEmail } from '../../../lib/email';
 import Stripe from 'stripe';
+import { type Order, type ShippingAddress } from '../../types/order';
 
 export async function POST(request: NextRequest) {
   try {

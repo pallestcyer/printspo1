@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, Dispatch, SetStateAction, useCallback } from 'react';
 import { Plus, X, ChevronLeft, ChevronRight, Loader2, Download } from 'lucide-react';
 import { PrintBoardPreview } from './PrintBoardPreview';
-import { PRINT_SIZES } from '@/lib/constants';
+import { PRINT_SIZES } from '../lib/constants';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import Image from 'next/image';
-import { type Board, type ScrapedImage } from '@/app/types/board';
-import { cn } from '@/lib/utils';
+import { type Board, type ScrapedImage } from '../app/types/board';
+import { cn } from '../lib/utils';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 

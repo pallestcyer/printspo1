@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/api-clients';
+import { stripe } from '../../../lib/api-clients';
 import { Resend } from 'resend';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
