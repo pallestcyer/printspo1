@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { kv } from '@vercel/kv';
 import crypto from 'crypto';
-import { ORDER_STATUS } from '@/app/types/order';
+import { ORDER_STATUS } from '../../types/order';
 import { v2 as cloudinary } from 'cloudinary';
 import sharp from 'sharp';
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type PrintJob, type PrintOrder, type PrintSize } from '@/app/types/order';
+import { ORDER_STATUS, type PrintJob, type PrintOrder, type PrintSize } from '../../../app/types/order';
 
 interface _OrderData {
   orderId: string;
