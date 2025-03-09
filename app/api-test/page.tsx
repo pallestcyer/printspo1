@@ -3,9 +3,12 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface TestResult {
-  status: 'success' | 'error' | 'pending';
+  name: string;
+  success: boolean;
+  status: string;
+  message?: string;
   error?: string;
-  data?: any;
+  data?: unknown;
 }
 
 interface TestResults {
@@ -13,7 +16,7 @@ interface TestResults {
 }
 
 export default function ApiTestPage() {
-  const [results, setResults] = useState<TestResults>({});
+  const [results, setResults] = useState<TestResult[]>([]);
   const [loading, setLoading] = useState(false);
 
   const endpoints = [
@@ -34,18 +37,22 @@ export default function ApiTestPage() {
         if (!response.ok) throw new Error(data.error || 'Test failed');
 
         newResults[endpoint.name] = {
+          name: endpoint.name,
+          success: true,
           status: 'success',
           data
         };
       } catch (error) {
         newResults[endpoint.name] = {
+          name: endpoint.name,
+          success: false,
           status: 'error',
           error: error instanceof Error ? error.message : 'An unknown error occurred'
         };
       }
     }
 
-    setResults(newResults);
+    setResults(Object.values(newResults));
     setLoading(false);
   };
 
@@ -69,9 +76,9 @@ export default function ApiTestPage() {
       </button>
 
       <div className="space-y-4">
-        {Object.entries(results).map(([name, result]) => (
-          <div key={name} className="p-4 border rounded-lg">
-            <h2 className="font-semibold mb-2">{name}</h2>
+        {results.map((result) => (
+          <div key={result.name} className="p-4 border rounded-lg">
+            <h2 className="font-semibold mb-2">{result.name}</h2>
             <div className={`text-sm ${
               result.status === 'success' ? 'text-green-600' : 'text-red-600'
             }`}>

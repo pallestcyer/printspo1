@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 
 interface ImageReplaceModalProps {
   scrapedImages: Array<{ url: string; alt?: string }>;
@@ -42,10 +43,12 @@ export function ImageReplaceModal({
                 }}
                 className="relative aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-500 transition-all"
               >
-                <img
-                  src={image.url}
-                  alt={image.alt || ''}
-                  className="object-cover w-full h-full"
+                <Image 
+                  src={image.url} 
+                  alt={image.alt || ''} 
+                  width={500} 
+                  height={300} 
+                  style={{ objectFit: 'contain' }}
                 />
               </button>
             ))}

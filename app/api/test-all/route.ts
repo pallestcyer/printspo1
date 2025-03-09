@@ -14,22 +14,29 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+interface TestResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: unknown;
+}
+
 export async function GET() {
-  const results = {
-    stripe: false,
-    resend: false,
-    pdf: false,
-    details: {} as Record<string, any>
-  };
+  const results: TestResponse[] = [];
   
   try {
     // Test Stripe
     try {
       const stripeTest = await stripe.paymentIntents.list({ limit: 1 });
-      results.stripe = !!stripeTest.data;
-      results.details.stripe = 'Successfully connected to Stripe API';
+      results.push({
+        success: !!stripeTest.data,
+        message: 'Successfully connected to Stripe API'
+      });
     } catch (error) {
-      results.details.stripe = `Stripe error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      results.push({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
 
     // Test Resend
@@ -40,10 +47,15 @@ export async function GET() {
         subject: 'Test Email',
         text: 'This is a test email to verify Resend functionality'
       });
-      results.resend = true;
-      results.details.resend = 'Successfully sent test email';
+      results.push({
+        success: true,
+        message: 'Successfully sent test email'
+      });
     } catch (error) {
-      results.details.resend = `Resend error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      results.push({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
 
     // Test PDF Generation
@@ -66,10 +78,15 @@ export async function GET() {
         { folder: 'test' }
       );
 
-      results.pdf = !!uploadResponse.secure_url;
-      results.details.pdf = 'Successfully generated and uploaded test image';
+      results.push({
+        success: !!uploadResponse.secure_url,
+        message: 'Successfully generated and uploaded test image'
+      });
     } catch (error) {
-      results.details.pdf = `PDF generation error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      results.push({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
 
     return NextResponse.json(results);

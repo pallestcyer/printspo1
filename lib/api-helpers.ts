@@ -1,3 +1,5 @@
+import { PrintOrder } from '@/app/types/order';
+
 interface FetchOptions {
   headers?: Record<string, string>;
 }
@@ -23,4 +25,17 @@ export async function fetchWithErrorHandling(
   }
 
   return response.json();
+}
+
+type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+};
+
+export function handleApiResponse<T>(response: ApiResponse<T>): T {
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Unknown error occurred');
+  }
+  return response.data;
 } 

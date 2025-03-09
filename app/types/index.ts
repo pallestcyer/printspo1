@@ -49,4 +49,7 @@ export interface Layout {
 export interface DragItem {
   index: number;
   type: string;
-} 
+}
+
+// Re-export types from board.ts
+export * from './board'; 

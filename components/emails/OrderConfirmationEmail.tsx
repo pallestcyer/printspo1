@@ -1,71 +1,65 @@
+import React from 'react';
 import {
-  Html,
   Body,
   Container,
-  Text,
+  Head,
+  Heading,
+  Hr,
+  Html,
   Preview,
   Section,
-  Head,
+  Text
 } from '@react-email/components';
+import { type OrderConfirmationEmailProps, type PrintBoard } from '@/app/types/order';
 
-interface OrderConfirmationEmailProps {
-  orderId: string;
-  customerName?: string;
-  shippingAddress?: any;
-  shippingMethod?: string;
-  orderDetails: any[];
-  totalAmount: number;
-}
-
-export const OrderConfirmationEmail = ({
+const OrderConfirmationEmail: React.FC<OrderConfirmationEmailProps> = ({
   orderId,
   customerName,
   shippingAddress,
   shippingMethod,
   orderDetails,
-  totalAmount,
-}: OrderConfirmationEmailProps) => {
+  totalAmount
+}) => {
   return (
     <Html>
       <Head />
-      <Preview>Your Printspo order confirmation {orderId}</Preview>
+      <Preview>Your order confirmation from PrintSpo</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={heading}>Order Confirmation</Text>
-          <Text style={paragraph}>
-            Hi {customerName},
+          <Heading style={h1}>Order Confirmation</Heading>
+          <Text style={text}>Dear {customerName},</Text>
+          <Text style={text}>
+            Thank you for your order! We&apos;re excited to fulfill your print request.
           </Text>
-          <Text style={paragraph}>
-            Thank you for your order! We'll start processing it right away.
-          </Text>
-          
-          <Section style={section}>
-            <Text style={subheading}>Order Details</Text>
-            <Text style={orderText}>Order ID: {orderId}</Text>
-            {orderDetails.map((board, index) => (
-              <Text key={index} style={orderText}>
-                Print {index + 1}: {board.printSize.width}" × {board.printSize.height}"
-              </Text>
-            ))}
-            <Text style={totalText}>Total: ${totalAmount.toFixed(2)}</Text>
-          </Section>
 
           <Section style={section}>
-            <Text style={subheading}>Shipping Information</Text>
-            <Text style={shippingText}>{shippingMethod}</Text>
-            <Text style={addressText}>{shippingAddress?.name}</Text>
-            <Text style={addressText}>{shippingAddress?.address?.line1}</Text>
-            {shippingAddress?.address?.line2 && (
-              <Text style={addressText}>{shippingAddress?.address?.line2}</Text>
-            )}
-            <Text style={addressText}>
-              {shippingAddress?.address?.city}, {shippingAddress?.address?.state} {shippingAddress?.address?.postal_code}
+            <Heading style={h2}>Order Details</Heading>
+            <Text style={text}>Order ID: {orderId}</Text>
+            <Text style={text}>Shipping Method: {shippingMethod}</Text>
+            
+            <Heading style={h3}>Shipping Address:</Heading>
+            <Text style={text}>
+              {shippingAddress.street}<br />
+              {shippingAddress.city}, {shippingAddress.state} {shippingAddress.zipCode}<br />
+              {shippingAddress.country}
             </Text>
-            <Text style={addressText}>{shippingAddress?.address?.country}</Text>
+
+            <Heading style={h3}>Print Boards:</Heading>
+            {orderDetails.boards?.map((board: PrintBoard, index: number) => (
+              <div key={board.id || index}>
+                <Text style={text}>
+                  Board {index + 1} - Size: {board.size}
+                </Text>
+              </div>
+            ))}
+
+            <Hr style={hr} />
+            
+            <Text style={total}>Total Amount: ${totalAmount.toFixed(2)}</Text>
           </Section>
 
-          <Text style={paragraph}>
-            We'll send you another email when your order ships.
+          <Text style={footer}>
+            If you have any questions about your order, please don&apos;t hesitate to contact us.
           </Text>
         </Container>
       </Body>
@@ -73,6 +67,7 @@ export const OrderConfirmationEmail = ({
   );
 };
 
+// Styles
 const main = {
   backgroundColor: '#ffffff',
   fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif',
@@ -80,82 +75,61 @@ const main = {
 
 const container = {
   margin: '0 auto',
-  padding: '40px 20px',
-  backgroundColor: '#ffffff',
-  borderRadius: '12px',
-  maxWidth: '600px',
+  padding: '20px 0 48px',
+  width: '580px',
 };
 
-const heading = {
-  fontSize: '28px',
-  fontWeight: '700',
-  lineHeight: '1.3',
-  color: '#1a1a1a',
-  textAlign: 'center' as const,
-  margin: '0 0 24px',
+const h1 = {
+  color: '#333',
+  fontSize: '24px',
+  fontWeight: 'bold',
+  margin: '40px 0',
+  padding: '0',
 };
 
-const paragraph = {
+const h2 = {
+  color: '#333',
+  fontSize: '20px',
+  fontWeight: 'bold',
+  margin: '24px 0',
+};
+
+const h3 = {
+  color: '#333',
   fontSize: '16px',
+  fontWeight: 'bold',
+  margin: '24px 0 12px',
+};
+
+const text = {
+  color: '#333',
+  fontSize: '14px',
   lineHeight: '24px',
-  color: '#4a4a4a',
-  margin: '0 0 16px',
 };
 
 const section = {
   padding: '24px',
-  border: 'solid 1px #e6e6e6',
-  borderRadius: '12px',
-  marginTop: '24px',
-  backgroundColor: '#fafafa',
+  border: '1px solid #dedede',
+  borderRadius: '5px',
+  margin: '24px 0',
 };
 
-const subheading = {
-  fontSize: '20px',
-  fontWeight: '600',
-  lineHeight: '1.4',
-  color: '#1a1a1a',
-  margin: '0 0 16px',
+const hr = {
+  borderColor: '#dedede',
+  margin: '20px 0',
 };
 
-const orderText = {
-  fontSize: '15px',
-  color: '#4a4a4a',
-  margin: '0 0 8px',
-};
-
-const totalText = {
+const total = {
+  color: '#333',
   fontSize: '16px',
-  fontWeight: '600',
-  color: '#1a1a1a',
-  marginTop: '16px',
-  borderTop: '1px solid #e6e6e6',
-  paddingTop: '16px',
+  fontWeight: 'bold',
+  margin: '12px 0 0 0',
 };
 
-const shippingText = {
-  fontSize: '15px',
-  color: '#1a1a1a',
-  fontWeight: '500',
-  margin: '0 0 16px',
-};
-
-const addressText = {
-  fontSize: '15px',
-  color: '#4a4a4a',
-  margin: '0 0 4px',
-};
-
-const _footer = {
-  color: '#666666',
-  fontFamily: 'sans-serif',
+const footer = {
+  color: '#666',
   fontSize: '12px',
-  lineHeight: '24px',
-  textAlign: 'center' as const,
-  margin: '48px 0',
+  lineHeight: '20px',
 };
 
-const _link = {
-  color: '#067df7',
-  textDecoration: 'none',
-}; 
+export default OrderConfirmationEmail; 

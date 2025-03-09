@@ -3,21 +3,29 @@ import { MultiBoardPreview } from '@/components/MultiBoardPreview';
 import Image from 'next/image';
 import DragDropProvider from '@/components/DndProvider';
 import { PRINT_SIZES } from '@/lib/constants';
-import type { Board } from '@/app/types';
+import type { Board } from '@/app/types/board';
 
 const ParentComponent = () => {
   const [isMultiBoard, setIsMultiBoard] = useState(false);
   const [boards, setBoards] = useState<Board[]>([{
     id: Date.now().toString(),
-    url: '',
+    boardUrl: '',
     name: '',
-    scrapedImages: [],
-    selectedIndices: [],
-    printSize: PRINT_SIZES[0],
+    layout: {
+      images: []
+    },
+    printSize: {
+      width: PRINT_SIZES[0].width,
+      height: PRINT_SIZES[0].height,
+      name: PRINT_SIZES[0].name,
+      price: PRINT_SIZES[0].price
+    },
     spacing: 0.5,
+    cornerRounding: 0,
+    selectedIndices: [],
     containMode: false,
     isPortrait: true,
-    cornerRounding: 0
+    scrapedImages: []
   }]);
 
   return (

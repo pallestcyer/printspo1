@@ -4,8 +4,8 @@ import { PrintBoardPreview } from './PrintBoardPreview';
 import { PRINT_SIZES } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
-import _Image from 'next/image';
-import { type Board, ScrapedImage } from '@/app/types';
+import Image from 'next/image';
+import { type Board, type ScrapedImage } from '@/app/types/board';
 import { cn } from '@/lib/utils';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -35,13 +35,70 @@ interface EnhancedScrapedImage extends ScrapedImage {
   id?: string;
 }
 
-type EnhancedBoard = Omit<Board, 'scrapedImages'> & {
+type EnhancedBoard = {
+  id: string;
+  boardUrl: string;
+  name: string;
+  layout: {
+    images: Array<{
+      url: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }>;
+  };
+  printSize: {
+    width: number;
+    height: number;
+    name: string;
+    price: number;
+  };
+  spacing: number;
+  cornerRounding: number;
   scrapedImages: EnhancedScrapedImage[];
+  selectedIndices: number[];
+  containMode: boolean;
+  isPortrait: boolean;
 };
 
-const calculateOrderTotal = (boards: Board[]) => {
+interface _BoardConfig {
+  id: string;
+  layout: {
+    images: {
+      url: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }[];
+  };
+  printSize: {
+    width: number;
+    height: number;
+    name: string;
+  };
+  spacing: number;
+}
+
+interface BoardPreviewProps {
+  id: string;
+  layout: {
+    images: Array<{
+      url: string;
+      position: { x: number; y: number; w: number; h: number };
+      rotation: number;
+    }>;
+  };
+  printSize: {
+    width: number;
+    height: number;
+    name: string;
+  };
+  spacing: number;
+}
+
+const calculateOrderTotal = (boards: Board[]): number => {
   return boards.reduce((total, board) => {
-    // Only add to total if board has selected images
+    if (!board.selectedIndices || !board.printSize?.price) {
+      return total;
+    }
     return total + (board.selectedIndices.length > 0 ? board.printSize.price : 0);
   }, 0);
 };
@@ -53,8 +110,8 @@ const _generatePreview = async (board: Board) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         images: board.selectedIndices.map(index => ({
-          url: board.scrapedImages[index].url,
-          alt: board.scrapedImages[index].alt || '',
+          url: board.scrapedImages?.[index]?.url ?? '',
+          alt: board.scrapedImages?.[index]?.alt ?? '',
           position: { x: 0, y: 0, w: 1, h: 1 },
           rotation: 0,
           containMode: board.containMode,
@@ -92,15 +149,23 @@ export function MultiBoardPreview({
   const _router = useRouter();
   const [boards, setBoards] = useState<EnhancedBoard[]>([{
     id: Date.now().toString(),
-    url: '',
-    name: '',
-    scrapedImages: [],
-    selectedIndices: [],
-    printSize: PRINT_SIZES[0],
+    layout: {
+      images: []
+    },
+    printSize: {
+      width: PRINT_SIZES[0].width,
+      height: PRINT_SIZES[0].height,
+      name: PRINT_SIZES[0].name,
+      price: PRINT_SIZES[0].price
+    },
     spacing: 0.5,
+    cornerRounding: 0,
+    selectedIndices: [],
     containMode: false,
     isPortrait: true,
-    cornerRounding: 0
+    scrapedImages: [],
+    boardUrl: '',
+    name: ''
   }]);
   const [activeBoardIndex, setActiveBoardIndex] = useState(0);
   const [_loading, _setLoading] = useState(false);
@@ -195,8 +260,8 @@ export function MultiBoardPreview({
     return () => window.removeEventListener('resize', handleResize);
   }, [boards]);
 
-  const hasAnyScrapedImages = (boards: Board[]) => {
-    return boards.some(board => board.scrapedImages.length > 0);
+  const hasAnyScrapedImages = (boards: Board[]): boolean => {
+    return boards.some(board => board.scrapedImages && board.scrapedImages.length > 0);
   };
 
   const _validateBoard = (board: Board): string | null => {
@@ -204,7 +269,7 @@ export function MultiBoardPreview({
     const isDuplicate = boards.some(
       existingBoard => 
         existingBoard.id !== board.id && 
-        existingBoard.url === board.url
+        existingBoard.boardUrl === board.boardUrl
     );
 
     if (isDuplicate) {
@@ -212,7 +277,7 @@ export function MultiBoardPreview({
     }
 
     // Only check for selected images during checkout
-    if (board.scrapedImages.length > 0 && !board.selectedIndices.length) {
+    if (board.scrapedImages?.length && !board.selectedIndices.length) {
       return 'Please select at least one image';
     }
 
@@ -234,10 +299,7 @@ export function MultiBoardPreview({
       // Show initial loading progress
       setLoadingStates(prev => ({ ...prev, [board.id]: 30 }));
 
-      // Use relative URL instead of hardcoded localhost
-      const apiUrl = '/api/scrape';
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -246,26 +308,18 @@ export function MultiBoardPreview({
         body: JSON.stringify({ 
           url: url.trim() 
         })
-      }).catch(error => {
-        console.error('Fetch error:', error);
-        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
-          throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
-        }
-        throw error;
       });
 
       setLoadingStates(prev => ({ ...prev, [board.id]: 60 }));
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Scrape API error:', errorData);
         throw new Error(errorData.details || 'Failed to import from Pinterest. Please check the URL and try again.');
       }
 
       const data = await response.json();
       
       if (!data.images || !Array.isArray(data.images)) {
-        console.error('Invalid response format:', data);
         throw new Error('Received invalid data from Pinterest. Please try again.');
       }
 
@@ -273,20 +327,39 @@ export function MultiBoardPreview({
         throw new Error('No images found. Please check if the URL is correct and the board is public.');
       }
 
-      // Process the successful response
       const initialSelectedIndices = data.images.length >= 4 
         ? [0, 1, 2, 3] 
         : data.images.map((_: any, index: number) => index);
 
       setBoards(prevBoards => {
         const newBoards = [...prevBoards];
-        newBoards[boardIndex] = {
-          ...board,
-          url,
-          name: data.name || url.split('/').pop() || '',
-          scrapedImages: data.images,
-          selectedIndices: initialSelectedIndices
+        const updatedBoard: EnhancedBoard = {
+          id: board.id,
+          boardUrl: url,
+          name: data.name || '',
+          layout: {
+            images: []
+          },
+          printSize: {
+            width: PRINT_SIZES[0].width,
+            height: PRINT_SIZES[0].height,
+            name: PRINT_SIZES[0].name,
+            price: PRINT_SIZES[0].price
+          },
+          spacing: 0.5,
+          cornerRounding: 0,
+          selectedIndices: initialSelectedIndices,
+          containMode: false,
+          isPortrait: true,
+          scrapedImages: data.images.map((img: any) => ({
+            url: img.url,
+            alt: img.alt || '',
+            width: img.width,
+            height: img.height,
+            source: img.source
+          }))
         };
+        newBoards[boardIndex] = updatedBoard;
         return newBoards;
       });
 
@@ -410,19 +483,29 @@ export function MultiBoardPreview({
 
   const _handlePreviewDownload = async (board: Board) => {
     try {
+      if (!board.scrapedImages) {
+        throw new Error('No images available for preview');
+      }
+
       const response = await fetch('/api/prints/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          images: board.selectedIndices.map(index => ({
-            url: board.scrapedImages[index].url,
-            alt: board.scrapedImages[index].alt || '',
-            position: { x: 0, y: 0, w: 1, h: 1 },
-            rotation: 0,
-            containMode: board.containMode,
-            objectFit: 'contain',
-            quality: 90
-          })),
+          images: board.selectedIndices.map(index => {
+            const image = board.scrapedImages?.[index];
+            if (!image) {
+              throw new Error('Selected image not found');
+            }
+            return {
+              url: image.url,
+              alt: image.alt || '',
+              position: { x: 0, y: 0, w: 1, h: 1 },
+              rotation: 0,
+              containMode: board.containMode,
+              objectFit: 'contain',
+              quality: 90
+            };
+          }),
           printSize: board.printSize,
           spacing: board.spacing,
           containMode: board.containMode,
@@ -487,18 +570,27 @@ export function MultiBoardPreview({
       const newBoards = prevBoards.filter((_, index) => index !== indexToDelete);
       if (newBoards.length === 0) {
         // If we deleted the last board, create a new empty one
-        return [{
+        const emptyBoard: EnhancedBoard = {
           id: Date.now().toString(),
-          url: '',
+          boardUrl: '',
           name: '',
-          scrapedImages: [],
-          selectedIndices: [],
-          printSize: PRINT_SIZES[0],
+          layout: {
+            images: []
+          },
+          printSize: {
+            width: PRINT_SIZES[0].width,
+            height: PRINT_SIZES[0].height,
+            name: PRINT_SIZES[0].name,
+            price: PRINT_SIZES[0].price
+          },
           spacing: 0.5,
+          cornerRounding: 0,
+          selectedIndices: [],
           containMode: false,
           isPortrait: true,
-          cornerRounding: 0
-        }];
+          scrapedImages: []
+        };
+        return [emptyBoard];
       }
       return newBoards;
     });
@@ -509,110 +601,29 @@ export function MultiBoardPreview({
     }
   };
 
-  const _generateBoardPrintFile = async (board: Board, retries = 2) => {
-    for (let i = 0; i <= retries; i++) {
-      try {
-        const response = await fetch('/api/prints/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            images: board.selectedIndices.map(index => ({
-              url: board.scrapedImages[index].url,
-              alt: board.scrapedImages[index].alt,
-              position: { x: 0, y: 0, w: 1, h: 1 },
-              rotation: 0,
-              containMode: true, // Ensure image is contained
-              objectFit: 'contain', // Maintain aspect ratio
-              quality: 100 // Ensure high quality
-            })),
-            printSize: board.printSize,
-            spacing: board.spacing,
-            containMode: board.containMode,
-            isPreview: false,
-            dpi: 300
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to generate print file');
-        }
-
-        const data = await response.json();
-        return {
-          printFile: data.images[0].printUrl,
-          previewUrl: data.images[0].previewUrl,
-          printSize: board.printSize
-        };
-      } catch (error) {
-        if (i === retries) throw error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-      }
-    }
-  };
-
-  const handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length > 1) {
-      e.preventDefault(); // Prevent pinch zoom during image selection
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('touchstart', handleTouchStart, { passive: false });
-    return () => document.removeEventListener('touchstart', handleTouchStart);
-  }, []);
-
-  const _loadBoardImages = async (board: Board) => {
-    const loadedImages = await Promise.all(
-      board.scrapedImages.map(async (img) => {
-        try {
-          // Generate thumbnail first
-          const thumbnailResponse = await fetch(`/api/optimize-image?url=${encodeURIComponent(img.url)}&width=100`);
-          const thumbnailData = await thumbnailResponse.json();
-          
-          // Load full resolution in background
-          const fullImage = new window.Image();
-          fullImage.src = img.url;
-          
-          return {
-            ...img,
-            thumbnailUrl: thumbnailData.url,
-            loaded: true
-          };
-        } catch (error) {
-          console.error('Image load error:', error);
-          return { ...img, error: true };
-        }
-      })
-    );
-
-    const newBoards = [...boards];
-    newBoards[activeBoardIndex].scrapedImages = loadedImages;
-    setBoards(newBoards);
-  };
-
-  const _handleImageSelect = (boardId: string, imageUrl: string) => {
-    _setSelectedImages(prev => [...prev, imageUrl]);
-  };
-
-  const _handleImageRemove = (boardId: string, imageUrl: string) => {
-    _setSelectedImages(prev => prev.filter(url => url !== imageUrl));
-  };
-
   const _handleAddBoard = () => {
     const newBoards = [...boards];
-    newBoards.push({
+    const newBoard: EnhancedBoard = {
       id: Date.now().toString(),
-      url: '',
+      boardUrl: '',
       name: '',
-      scrapedImages: [],
-      selectedIndices: [],
-      printSize: PRINT_SIZES[0],
+      layout: {
+        images: []
+      },
+      printSize: {
+        width: PRINT_SIZES[0].width,
+        height: PRINT_SIZES[0].height,
+        name: PRINT_SIZES[0].name,
+        price: PRINT_SIZES[0].price
+      },
       spacing: 0.5,
+      cornerRounding: 0,
+      selectedIndices: [],
       containMode: false,
       isPortrait: true,
-      cornerRounding: 0
-    });
+      scrapedImages: []
+    };
+    newBoards.push(newBoard);
     setBoards(newBoards);
     setActiveBoardIndex(newBoards.length - 1);
   };
@@ -652,6 +663,10 @@ export function MultiBoardPreview({
   const _handleBoardRemove = (boardId: string) => {
     setBoards(prev => prev.filter(board => board.id !== boardId));
     _setSelectedImages(prev => prev.filter(url => !url.includes(boardId)));
+  };
+
+  const _renderBoard = (_board: BoardPreviewProps) => {
+    // Function implementation
   };
 
   return (
@@ -697,10 +712,13 @@ export function MultiBoardPreview({
                     <input
                       type="text"
                       placeholder="Paste your Pinterest board URL"
-                      value={board.url}
+                      value={board.boardUrl || ''}
                       onChange={(e) => {
                         const newBoards = [...boards];
-                        newBoards[index].url = e.target.value;
+                        newBoards[index] = {
+                          ...newBoards[index],
+                          boardUrl: e.target.value
+                        };
                         setBoards(newBoards);
                       }}
                       className="flex-1 p-2 border rounded-lg focus:border-[#D4A5A5] focus:outline-none transition-colors"
@@ -715,7 +733,7 @@ export function MultiBoardPreview({
                       </button>
                     )}
                     <button
-                      onClick={() => handleBoardImport(board.url, index)}
+                      onClick={() => handleBoardImport(board.boardUrl || '', index)}
                       className="px-6 py-2.5 bg-[#D4A5A5] hover:bg-[#b38989] text-white rounded-lg font-light transition-all duration-200 flex items-center gap-2"
                     >
                       <span>Create</span>
@@ -743,18 +761,29 @@ export function MultiBoardPreview({
 
             {isMultiMode && (
               <button
-                onClick={() => setBoards([...boards, {
-                  id: Date.now().toString(),
-                  url: '',
-                  name: '',
-                  scrapedImages: [],
-                  selectedIndices: [],
-                  printSize: PRINT_SIZES[0],
-                  spacing: 0.5,
-                  containMode: false,
-                  isPortrait: true,
-                  cornerRounding: 0
-                }])}
+                onClick={() => {
+                  const newBoard: EnhancedBoard = {
+                    id: Date.now().toString(),
+                    boardUrl: '',
+                    name: '',
+                    layout: {
+                      images: []
+                    },
+                    printSize: {
+                      width: PRINT_SIZES[0].width,
+                      height: PRINT_SIZES[0].height,
+                      name: PRINT_SIZES[0].name,
+                      price: PRINT_SIZES[0].price
+                    },
+                    spacing: 0.5,
+                    cornerRounding: 0,
+                    selectedIndices: [],
+                    containMode: false,
+                    isPortrait: true,
+                    scrapedImages: []
+                  };
+                  setBoards([...boards, newBoard]);
+                }}
                 className="mt-4 w-full p-2 border-2 border-dashed border-gray-200 rounded-lg text-gray-500 hover:border-[#D4A5A5]"
               >
                 <Plus className="w-3 h-4 inline mr-2" />
@@ -795,35 +824,37 @@ export function MultiBoardPreview({
                 <div className="relative">
                   <div className="overflow-x-auto pb-2 hide-scrollbar">
                     <div className="flex space-x-3 px-2">
-                      {boards[activeBoardIndex].scrapedImages
-                        // Filter out images that are already in the print board
-                        .filter((_, index) => !boards[activeBoardIndex].selectedIndices.includes(index))
-                        .map((image, _filteredIndex) => {
-                          // Find the original index in the scrapedImages array
-                          const originalIndex = boards[activeBoardIndex].scrapedImages.findIndex(
-                            (img, idx) => img.url === image.url && !boards[activeBoardIndex].selectedIndices.includes(idx)
-                          );
-                          
-                          return (
-                            <div 
-                              key={`image-${originalIndex}`}
-                              className="flex-shrink-0 w-20 h-20 relative overflow-hidden rounded-lg cursor-pointer hover:opacity-90"
-                              onClick={() => {
-                                // Add to print board selection
+                      {boards[activeBoardIndex]?.scrapedImages?.filter((_, index) => 
+                        !boards[activeBoardIndex].selectedIndices.includes(index)
+                      ).map((image, _filteredIndex) => {
+                        const originalIndex = boards[activeBoardIndex].scrapedImages?.findIndex(
+                          (img, idx) => img.url === image.url && !boards[activeBoardIndex].selectedIndices.includes(idx)
+                        ) ?? -1;
+                        
+                        return (
+                          <div 
+                            key={`image-${originalIndex}`}
+                            className="flex-shrink-0 w-20 h-20 relative overflow-hidden rounded-lg cursor-pointer hover:opacity-90"
+                            onClick={() => {
+                              if (originalIndex !== -1) {
                                 const newBoards = [...boards];
                                 const currentBoard = newBoards[activeBoardIndex];
                                 currentBoard.selectedIndices = [...currentBoard.selectedIndices, originalIndex];
                                 setBoards(newBoards);
-                              }}
-                            >
-                              <img
-                                src={image.url}
-                                alt={image.alt || ''}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          );
-                        })}
+                              }
+                            }}
+                          >
+                            <Image
+                              src={image.url}
+                              alt={image.alt || ''}
+                              width={80}
+                              height={80}
+                              style={{ objectFit: 'contain', width: '100%', height: 'auto' }}
+                              unoptimized={image.url.startsWith('data:')}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 bg-white/80 rounded-r-full p-1 shadow-sm">
@@ -845,12 +876,23 @@ export function MultiBoardPreview({
                 <DndProvider backend={HTML5Backend}>
                   <PrintBoardPreview
                     layout={{
-                      images: boards[activeBoardIndex].selectedIndices.map(index => ({
-                        url: boards[activeBoardIndex].scrapedImages[index].url,
-                        alt: boards[activeBoardIndex].scrapedImages[index].alt || '',
-                        position: { x: 0, y: 0, w: 1, h: 1 },
-                        rotation: 0
-                      })),
+                      images: boards[activeBoardIndex].selectedIndices.map(index => {
+                        const image = boards[activeBoardIndex].scrapedImages?.[index];
+                        if (!image) {
+                          return {
+                            url: '',
+                            alt: '',
+                            position: { x: 0, y: 0, w: 1, h: 1 },
+                            rotation: 0
+                          };
+                        }
+                        return {
+                          url: image.url,
+                          alt: image.alt || '',
+                          position: { x: 0, y: 0, w: 1, h: 1 },
+                          rotation: 0
+                        };
+                      }),
                       size: { 
                         width: boards[activeBoardIndex].printSize?.width || 0, 
                         height: boards[activeBoardIndex].printSize?.height || 0 
@@ -862,7 +904,6 @@ export function MultiBoardPreview({
                     isPortrait={boards[activeBoardIndex].isPortrait}
                     cornerRounding={boards[activeBoardIndex].cornerRounding}
                     onRemoveImage={(indexToRemove) => {
-                      // When an image is removed from the print board, it should return to the selection panel
                       const newBoards = [...boards];
                       const newSelectedIndices = newBoards[activeBoardIndex].selectedIndices.filter(
                         (_, i) => i !== indexToRemove
@@ -875,7 +916,10 @@ export function MultiBoardPreview({
                     }}
                     onImageSwap={moveImage}
                     _index={activeBoardIndex}
-                    images={boards[activeBoardIndex].selectedIndices.map(index => boards[activeBoardIndex].scrapedImages[index])}
+                    images={boards[activeBoardIndex].selectedIndices.map(index => {
+                      const image = boards[activeBoardIndex].scrapedImages?.[index];
+                      return image || { url: '', alt: '' };
+                    })}
                   />
                 </DndProvider>
               </section>

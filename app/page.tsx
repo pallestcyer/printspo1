@@ -3,23 +3,50 @@ import React, { useState } from 'react';
 import MultiBoardPreview from '@/components/MultiBoardPreview';
 import Image from 'next/image';
 import DragDropProvider from '@/components/DndProvider';
-import { PRINT_SIZES } from '@/lib/constants';
-import type { BoardsState } from '@/app/types';
+import { Board } from '@/app/types/board';
+
+interface _ScrapedImage {
+  url: string;
+  alt?: string;
+}
 
 export default function Home() {
   const [isMultiMode, setIsMultiMode] = useState(false);
-  const [boards, setBoards] = useState<BoardsState>([{
-    id: Date.now().toString(),
-    url: '',
-    name: '',
-    scrapedImages: [],
+  const [boards, setBoards] = useState<Board[]>([{
+    id: '1',
+    layout: {
+      images: []
+    },
+    printSize: {
+      width: 24,
+      height: 36,
+      name: '24x36',
+      price: 99.99
+    },
+    spacing: 0,
     selectedIndices: [],
-    printSize: PRINT_SIZES[0],
-    spacing: 0.5,
     containMode: false,
-    isPortrait: true,
-    cornerRounding: 0
+    cornerRounding: 0,
+    isPortrait: true
   }]);
+  function convertToBoard(boardState: Board[]): Board[] {
+    return boardState.map(board => ({
+      id: board.id,
+      layout: {
+        images: board.layout.images.map(img => ({
+          url: img.url,
+          position: img.position || { x: 0, y: 0, w: 1, h: 1 },
+          rotation: img.rotation || 0
+        }))
+      },
+      printSize: board.printSize,
+      spacing: board.spacing || 0,
+      selectedIndices: board.selectedIndices || [],
+      containMode: board.containMode || false,
+      cornerRounding: board.cornerRounding || 0,
+      isPortrait: board.isPortrait || true
+    }));
+  }
 
   return (
     <div className="bg-[#F7F7F7] h-auto">
@@ -44,13 +71,14 @@ export default function Home() {
                 <span className="font-[700] italic">Prints</span>{' '}<br />
                 <span className="font-[600] text-[#D4A5A5]">– Instantly.</span>
               </h1>
-              <div className="absolute -top-6 -right-6 sm:-top-8 sm:-right-8 w-10 sm:w-12">
+              <div className="absolute -top-6 -right-4 sm:-top-8 sm:-right-12 w-12 sm:w-14">
                 <Image
                   src="/CraftedInCanada.svg"
                   alt="Crafted in Canada"
-                  width={48}
-                  height={48}
+                  width={56}
+                  height={56}
                   className="w-full h-auto"
+                  style={{ color: '#2C2C2C' }}
                 />
               </div>
             </div>
@@ -69,7 +97,7 @@ export default function Home() {
               <MultiBoardPreview 
                 isMultiMode={isMultiMode}
                 onMultiModeChange={setIsMultiMode}
-                _selectedBoards={boards}
+                _selectedBoards={convertToBoard(boards)}
                 _onBoardsChange={setBoards}
               />
             </div>

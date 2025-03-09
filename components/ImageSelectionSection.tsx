@@ -1,9 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
+import { ImageData as _ImportedImageData } from '@/app/types/api';
+
+// Local interface definition (renamed to avoid confusion)
+interface _ImageData {
+  url: string;
+  alt?: string;
+  position?: { x: number; y: number; w: number; h: number };
+  rotation?: number;
+}
 
 interface ImageSelectionSectionProps {
-  images: any[];
+  images: Array<{
+    url: string;
+    alt?: string;
+    position?: { x: number; y: number; w: number; h: number };
+    rotation?: number;
+  }>;
   selectedIndices: number[];
   onSelect: (index: number) => void;
   _onRemove: (index: number) => void;

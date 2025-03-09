@@ -1,3 +1,4 @@
+import { ReactElement } from 'react';
 import { Resend } from 'resend';
 import type { Order } from '@/app/types/order';
 
@@ -34,8 +35,10 @@ export async function sendOrderConfirmation(order: Order) {
             
             <div style="margin-bottom: 24px;">
               <h2 style="color: #1f2937; margin-bottom: 16px;">Print Details:</h2>
-              <p style="margin-bottom: 8px;">Size: ${order.printSize.width}" × ${order.printSize.height}"</p>
-              <p style="margin-bottom: 8px;">Price: $${order.printSize.price}</p>
+              ${order.printSize && `
+                <p style="margin-bottom: 8px;">Size: ${order.printSize?.width}" × ${order.printSize?.height}"</p>
+                <p style="margin-bottom: 8px;">Price: $${(order.printSize?.price / 100).toFixed(2)}</p>
+              `}
             </div>
             
             <div style="margin-bottom: 24px;">
@@ -86,20 +89,20 @@ export async function sendAdminNotification(order: Order) {
             
             <div style="margin-top: 24px;">
               <h2>Print Details:</h2>
-              <p>Size: ${order.printSize.width}" × ${order.printSize.height}"</p>
-              <p>Price: $${order.printSize.price}</p>
+              ${order.printSize && `
+                <p>Size: ${order.printSize?.width}" × ${order.printSize?.height}"</p>
+                <p>Price: $${(order.printSize?.price / 100).toFixed(2)}</p>
+              `}
             </div>
 
-            ${order.shippingAddress ? `
-              <div style="margin-top: 24px;">
-                <h2>Shipping Address:</h2>
-                <p>${order.shippingAddress.name}</p>
-                <p>${order.shippingAddress.line1}</p>
-                ${order.shippingAddress.line2 ? `<p>${order.shippingAddress.line2}</p>` : ''}
-                <p>${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.postal_code}</p>
-                <p>${order.shippingAddress.country}</p>
-              </div>
-            ` : ''}
+            <div style="margin-bottom: 24px;">
+              <h2 style="color: #1f2937; margin-bottom: 16px;">Shipping Address:</h2>
+              ${order.shippingAddress.name ? `<p style="margin-bottom: 8px;">${order.shippingAddress.name}</p>` : ''}
+              <p style="margin-bottom: 8px;">${order.shippingAddress.street}</p>
+              ${order.shippingAddress.line2 ? `<p style="margin-bottom: 8px;">${order.shippingAddress.line2}</p>` : ''}
+              <p style="margin-bottom: 8px;">${order.shippingAddress.city}, ${order.shippingAddress.state} ${order.shippingAddress.zipCode}</p>
+              <p style="margin-bottom: 8px;">${order.shippingAddress.country}</p>
+            </div>
             
             <div style="margin-top: 24px;">
               <a href="${process.env.NEXT_PUBLIC_BASE_URL}/admin/orders/${order.id}" 
@@ -117,7 +120,7 @@ export async function sendAdminNotification(order: Order) {
       to: process.env.ADMIN_EMAIL!,
       subject: `New Order #${order.id}`,
       html,
-      text: `New order #${order.id} received. Size: ${order.printSize.width}"x${order.printSize.height}". Customer: ${order.email}`
+      text: `New order #${order.id} received. Size: ${order.printSize?.width}"x${order.printSize?.height}". Customer: ${order.email}`
     });
 
     if ('error' in result) {
@@ -127,6 +130,27 @@ export async function sendAdminNotification(order: Order) {
     return true;
   } catch (error) {
     console.error('Failed to send admin notification:', error);
+    return false;
+  }
+}
+
+interface SendEmailProps {
+  to: string;
+  subject: string;
+  component: ReactElement;
+}
+
+export async function sendEmail({ to, subject, component }: SendEmailProps) {
+  try {
+    await resend.sendEmail({
+      from: 'Printspo <orders@printspo.com>',
+      to,
+      subject,
+      react: component
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to send email:', error);
     return false;
   }
 } 

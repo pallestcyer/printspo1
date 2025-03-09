@@ -2,6 +2,7 @@ import { PRINT_SIZES } from '@/lib/constants';
 import { PrintSizeSelector } from '@/components/PrintSizeSelector';
 import { GapControl } from '@/components/GapControl';
 import type { Layout } from '@/app/types';
+import Image from 'next/image';
 
 // Maximum number of images supported by any layout
 const _MAX_IMAGES = 12;
@@ -125,10 +126,13 @@ export const LayoutCustomizationSection = ({
                 key={index}
                 className="relative aspect-square overflow-hidden rounded-lg shadow-md"
               >
-                <img
-                  src={image.url}
+                <Image 
+                  src={image.url} 
                   alt={image.alt || ''}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  width={400}
+                  height={400}
+                  style={{ objectFit: 'contain' }}
+                  unoptimized={image.url.startsWith('data:')}
                 />
               </div>
             ))}

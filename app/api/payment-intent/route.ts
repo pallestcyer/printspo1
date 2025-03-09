@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import Stripe from 'stripe';
 import crypto from 'crypto';
-import type { Order, OrderStatus, Layout, PrintSize } from '@/app/types/order';
+import type { PrintOrder, OrderStatus, Layout, PrintSize } from '@/app/types/order';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
@@ -32,9 +32,11 @@ export async function POST(req: Request) {
     });
 
     // Store order after successful payment intent creation
-    const order: Order = {
+    const order: PrintOrder = {
       id: orderId,
-      layout,
+      layout: {
+        images: layout.images
+      },
       printSize,
       status: 'pending' as OrderStatus,
       createdAt: new Date().toISOString(),

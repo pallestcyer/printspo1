@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ImageReplaceModal } from './ImageReplaceModal';
 import type { Layout, ScrapedImage } from '@/app/types';
 import type { PrintSize } from '@/app/types/order';
+import Image from 'next/image';
 
 interface PhotoLayoutGridProps {
   layout: Layout & {
@@ -113,11 +114,12 @@ export function PhotoLayoutGrid({
               }}
             >
               <div className="relative aspect-square overflow-hidden shadow-md" style={{ borderRadius: `${cornerRounding}px` }}>
-                <img
-                  src={image.url}
-                  alt={image.alt || ''}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  draggable={false}
+                <Image 
+                  src={image.url} 
+                  alt={image.alt || ''} 
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  unoptimized={image.url.startsWith('data:')}
                 />
                 {/* Hover overlay */}
                 <div className="absolute inset-0 bg-black opacity-0 group-hover:opacity-20 transition-opacity duration-200" />

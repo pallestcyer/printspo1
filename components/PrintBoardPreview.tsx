@@ -1,6 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
-import type { PrintSize, ScrapedImage } from '@/app/types';
+import type { ScrapedImage } from '@/app/types/board';
+import type { PrintSize } from '@/app/types/order';
+import Image from 'next/image';
+
+// If ORDER_STATUS is not used, remove it from the import
+// If you need it later, you can import it like this:
+// import { ORDER_STATUS } from '@/app/types/order';
 
 interface DragItem {
   index: number;
@@ -51,29 +57,6 @@ interface DraggableImageProps {
   containMode: boolean;
 }
 
-// Custom hook for drag and drop functionality
-const useDragDrop = (index: number, onDrop: (dragIndex: number, dropIndex: number) => void) => {
-  const [{ isDragging }, drag] = useDrag({
-    type: 'BOARD_IMAGE',
-    item: { index },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging()
-    })
-  });
-
-  const [{ isOver }, drop] = useDrop({
-    accept: 'BOARD_IMAGE',
-    drop: (item: { index: number }) => {
-      onDrop(item.index, index);
-    },
-    collect: monitor => ({
-      isOver: !!monitor.isOver()
-    })
-  });
-
-  return { isDragging, isOver, drag, drop };
-};
-
 // Separate component for draggable image
 const DraggableImage = ({ image, index, onDrop, onRemove, cornerRounding, containMode }: DraggableImageProps) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -95,18 +78,11 @@ const DraggableImage = ({ image, index, onDrop, onRemove, cornerRounding, contai
       const dragIndex = item.index;
       const hoverIndex = index;
 
-      // Don't replace items with themselves
       if (dragIndex === hoverIndex) {
         return;
       }
 
-      // Time to actually perform the action
       onDrop(dragIndex, hoverIndex);
-
-      // Note: we're mutating the monitor item here!
-      // Generally it's better to avoid mutations,
-      // but it's good here for the sake of performance
-      // to avoid expensive index searches.
       item.index = hoverIndex;
     },
     collect: (monitor) => ({
@@ -124,13 +100,16 @@ const DraggableImage = ({ image, index, onDrop, onRemove, cornerRounding, contai
         borderRadius: `${Math.min(cornerRounding * 2, 24)}px`
       }}
     >
-      <img
+      <Image
         src={image.url}
         alt={image.alt || ''}
         className="absolute inset-0 w-full h-full object-center transition-transform duration-200 group-hover:scale-105"
         style={{
           objectFit: containMode ? 'contain' : 'cover'
         }}
+        width={600}
+        height={800}
+        unoptimized={image.url.startsWith('data:')}
       />
       <button
         onClick={(e) => {

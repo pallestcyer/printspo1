@@ -1,0 +1,19 @@
+0 verbose cli C:\nvm4w\nodejs\node.exe C:\Users\palle\AppData\Roaming\npm\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.1.0
+2 info using node@v22.13.0
+3 silly config load:file:C:\Users\palle\AppData\Roaming\npm\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\palle\Downloads\ComfyUI_windows_portable\THEFORCE\PrintspoCA\printspo1\.npmrc
+5 silly config load:file:C:\Users\palle\.npmrc
+6 silly config load:file:C:\Users\palle\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm run lint .eslintcache
+8 verbose argv "run" "lint" "--cache-location" ".eslintcache" "--cache" "false"
+9 verbose logfile logs-max:10 dir:C:\Users\palle\Downloads\ComfyUI_windows_portable\THEFORCE\PrintspoCA\printspo1\false\_logs\2025-02-28T02_41_31_866Z-
+10 verbose logfile C:\Users\palle\Downloads\ComfyUI_windows_portable\THEFORCE\PrintspoCA\printspo1\false\_logs\2025-02-28T02_41_31_866Z-debug-0.log
+11 silly logfile done cleaning log files
+12 http fetch GET 200 https://registry.npmjs.org/npm 153ms
+13 verbose cwd C:\Users\palle\Downloads\ComfyUI_windows_portable\THEFORCE\PrintspoCA\printspo1
+14 verbose os Windows_NT 10.0.19045
+15 verbose node v22.13.0
+16 verbose npm  v11.1.0
+17 verbose exit 1
+18 verbose code 1

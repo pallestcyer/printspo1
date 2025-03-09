@@ -1,100 +1,78 @@
-import { NextResponse } from 'next/server';
-import { headers } from 'next/headers';
+import { type NextRequest } from 'next/server';
+import OrderConfirmationEmail from '@/components/emails/OrderConfirmationEmail';
+import { type Order, type ShippingAddress } from '@/app/types/order';
+import { getOrder } from '@/lib/stripe-helpers';
+import { sendEmail } from '@/lib/email';
 import Stripe from 'stripe';
-import { Resend } from 'resend';
-import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type Order } from '@/app/types/order';
-import { OrderConfirmationEmail } from '@/components/emails/OrderConfirmationEmail';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2022-11-15',
-});
-
-const resend = process.env.RESEND_API_KEY 
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
-
-// Configure route options
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // Check if Resend is configured
-    if (!resend) {
-      console.warn('Resend API key not configured, skipping email notification');
-      return NextResponse.json({ message: 'Webhook processed (email disabled)' });
-    }
+    const stripeEvent = await request.json();
+    const session = await getOrder(stripeEvent.data.object.id) as Stripe.Checkout.Session;
 
-    const body = await request.text();
-    const headersList = headers();
-    const signature = headersList.get('stripe-signature')!;
+    // Transform shipping address from Stripe format to our format
+    const shippingAddress: ShippingAddress = {
+      street: session.shipping_details?.address?.line1 || '',
+      city: session.shipping_details?.address?.city || '',
+      state: session.shipping_details?.address?.state || '',
+      zipCode: session.shipping_details?.address?.postal_code || '',
+      country: session.shipping_details?.address?.country || ''
+    };
 
-    // Verify webhook signature
-    const event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      webhookSecret
-    );
+    // Get shipping method name
+    const shippingRate = typeof session.shipping_cost?.shipping_rate === 'string' 
+      ? 'Standard Shipping'
+      : session.shipping_cost?.shipping_rate?.display_name || 'Standard Shipping';
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      
-      // Add null check for success_url
-      if (!session.success_url) {
-        throw new Error('Missing success_url in session');
-      }
+    // Create the order object that matches our Order type
+    const order: Order = {
+      id: session.id,
+      status: session.status || 'pending',
+      customerName: session.customer_details?.name || 'Valued Customer',
+      email: session.customer_details?.email || undefined,
+      shippingAddress,
+      shippingMethod: shippingRate,
+      items: session.line_items?.data.map(item => ({
+        id: item.id,
+        name: item.description || '',
+        quantity: item.quantity || 1,
+        price: (item.amount_total || 0) / 100
+      })) || [],
+      totalAmount: (session.amount_total || 0) / 100,
+      metadata: session.metadata || {}
+    };
 
-      const orderId = session?.metadata?.orderId;
-      if (!orderId) {
-        console.error('No order ID found in session metadata');
-        return new Response('No order ID found', { status: 400 });
-      }
-      
-      // Get order details from KV store
-      const order = await kv.get(`order:${orderId}`) as Order;
-      if (!order) throw new Error(`Order not found: ${orderId}`);
+    const emailProps = {
+      orderId: order.id,
+      customerName: order.customerName,
+      shippingAddress: order.shippingAddress,
+      shippingMethod: order.shippingMethod,
+      orderDetails: {
+        items: order.items,
+        boards: order.boards
+      },
+      totalAmount: order.totalAmount,
+      order,
+      metadata: order.metadata
+    };
 
-      // Update order status
-      await kv.set(`order:${orderId}`, {
-        ...order,
-        status: ORDER_STATUS.PAID,
-        shippingAddress: session.shipping_details,
-        shippingOption: session.shipping_cost,
-        paymentStatus: session.payment_status,
-        customerEmail: session.customer_details?.email,
-        updatedAt: new Date().toISOString()
-      });
-
-      // Get shipping method display name with proper null checks
-      const shippingRate = session.shipping_cost?.shipping_rate;
-      const shippingMethod = typeof shippingRate === 'object' && shippingRate
-        ? shippingRate.display_name || 'Standard Shipping'
-        : 'Standard Shipping';
-
-      // Send confirmation email using sendEmail
-      await resend.sendEmail({
-        from: 'Printspo <orders@printspo.ca>',
-        to: session.customer_details?.email || 'support@printspo.ca',
-        subject: `Order Confirmed - ${orderId}`,
-        react: OrderConfirmationEmail({
-          orderId,
-          customerName: session.shipping_details?.name,
-          shippingAddress: session.shipping_details,
-          shippingMethod,
-          orderDetails: [order],  // Wrap the order in an array
-          totalAmount: session.amount_total ? session.amount_total / 100 : 0,
-        }),
+    // Send email
+    const emailComponent = OrderConfirmationEmail(emailProps);
+    if (emailComponent) {
+      await sendEmail({
+        to: session.customer_details?.email || '',
+        subject: `Order Confirmation - ${order.id}`,
+        component: emailComponent
       });
     }
 
-    return NextResponse.json({ received: true });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200
+    });
   } catch (error) {
     console.error('Webhook error:', error);
-    return NextResponse.json(
-      { error: 'Webhook processing failed' },
+    return new Response(
+      JSON.stringify({ error: 'Webhook handler failed' }),
       { status: 500 }
     );
   }

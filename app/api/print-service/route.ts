@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { ORDER_STATUS, type PrintJob, type Order, type PrintSize } from '@/app/types/order';
+import { ORDER_STATUS, type PrintJob, type PrintOrder, type PrintSize } from '@/app/types/order';
 
 interface _OrderData {
   orderId: string;
@@ -12,11 +12,12 @@ interface _OrderData {
 export async function POST(request: Request) {
   try {
     const { orderId } = await request.json();
-    const order = await kv.get(`order:${orderId}`) as Order | null;
 
-    if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
+
+    const order = await kv.get(`order:${orderId}`) as PrintOrder;
 
     // Create a copy of printSize with guaranteed name
     const printSize: PrintSize = {
@@ -26,26 +27,23 @@ export async function POST(request: Request) {
 
     // Create print job
     const printJob: PrintJob = {
-      orderId,
+      orderId: order.id,
       printFile: order.printFile || '',
       printSize,
-      customerEmail: order.customerEmail
+      customerEmail: order.customerEmail || ''
     };
 
-    // Here you would integrate with your print service
-    // For example: Printful, Gooten, etc.
-    
     // Update order status
-    await kv.hset(`order:${orderId}`, {
-      status: ORDER_STATUS.PROCESSING,
-      printJobCreatedAt: new Date().toISOString()
+    await kv.set(`order:${orderId}`, {
+      ...order,
+      status: ORDER_STATUS.PROCESSING
     });
 
-    return NextResponse.json({ success: true, printJob });
+    return NextResponse.json(printJob);
   } catch (error) {
     console.error('Print service error:', error);
     return NextResponse.json(
-      { error: 'Failed to create print job' },
+      { error: 'Failed to process print job' },
       { status: 500 }
     );
   }

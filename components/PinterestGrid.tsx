@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ScrapedImage } from '@/app/types';
+import Image from 'next/image';
 
 const PinterestGrid = () => {
   const [url, setUrl] = useState('');
@@ -70,10 +71,13 @@ const PinterestGrid = () => {
               key={imageKey}
               className={`relative overflow-hidden rounded-lg shadow-lg ${aspectRatio}`}
             >
-              <img
-                src={img.url}
-                alt={img.alt || 'Pinterest image'}
-                className="w-full h-full object-cover absolute top-0 left-0"
+              <Image 
+                src={img.url} 
+                alt={img.alt || 'Pinterest image'} 
+                width={300}
+                height={300}
+                style={{ objectFit: 'cover' }}
+                unoptimized={img.url.startsWith('data:')}
               />
             </div>
           );

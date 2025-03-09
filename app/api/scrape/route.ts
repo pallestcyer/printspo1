@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import _cheerio from 'cheerio';
 import path from 'path';
 import fs from 'fs';
+// import { _GenericObject, _ApiResponse, _ImageData } from '@/app/types';
 
 // Configure route options
 export const runtime = 'nodejs';
@@ -71,6 +74,36 @@ interface PinterestImage {
   width: number;
   height: number;
   id: string;
+}
+
+interface _PinterestResponse {
+  resource_response: {
+    data: {
+      results: PinterestPin[];
+    };
+  };
+}
+
+interface PinterestPin {
+  images: {
+    [key: string]: {
+      url: string;
+      width: number;
+      height: number;
+    };
+  };
+  description: string;
+  title: string;
+  id: string;
+  link: string;
+}
+
+interface _ScrapedImage {
+  url: string;
+  alt: string;
+  width: number;
+  height: number;
+  source: string;
 }
 
 // Constants
@@ -328,7 +361,7 @@ async function _ensureImagesLoaded(page: PuppeteerPage): Promise<void> {
     await page.waitForFunction(() => document.readyState === 'complete', { 
       timeout: 10000 
     });
-  } catch (e) {
+  } catch (_e) {
     console.log('Page load timeout, continuing anyway');
   }
   
@@ -336,7 +369,7 @@ async function _ensureImagesLoaded(page: PuppeteerPage): Promise<void> {
   console.log('Waiting for Pinterest images to appear');
   try {
     await page.waitForSelector('img[src*="pinimg.com"]', { timeout: IMAGE_SELECTOR_TIMEOUT });
-  } catch (e) {
+  } catch (_e) {
     console.log('No Pinterest images found in initial load, trying alternative selectors');
     
     // Try alternative selectors
@@ -418,7 +451,7 @@ async function _getBrowser(): Promise<PuppeteerBrowser> {
             console.log(`Found browser at: ${executablePath}`);
             break;
           }
-        } catch (err) {
+        } catch (_err) {
           // Continue checking
         }
       }
@@ -474,9 +507,9 @@ async function _getBrowser(): Promise<PuppeteerBrowser> {
       
       return browser as unknown as PuppeteerBrowser;
     }
-  } catch (error: unknown) {
-    console.error('Browser launch error:', error instanceof Error ? error.message : 'Unknown error');
-    throw new Error(`Failed to launch browser: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } catch (_error: unknown) {
+    console.error('Browser launch error:', _error instanceof Error ? _error.message : 'Unknown error');
+    throw new Error(`Failed to launch browser: ${_error instanceof Error ? _error.message : 'Unknown error'}`);
   }
 }
 

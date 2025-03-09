@@ -1,8 +1,9 @@
 import { kv } from '@vercel/kv';
+import { PrintOrder } from '@/app/types/order';
 
 export async function storeOrderData(
   orderId: string,
-  data: any,
+  data: PrintOrder,
   expirationInDays = 30
 ): Promise<void> {
   // Store in KV with expiration (30 days default)
@@ -10,13 +11,13 @@ export async function storeOrderData(
   await kv.set(`order:${orderId}`, data, { ex: expirationInSeconds });
 }
 
-export async function getOrderData(orderId: string): Promise<any | null> {
+export async function getOrderData(orderId: string): Promise<PrintOrder | null> {
   return await kv.get(`order:${orderId}`);
 }
 
 export async function updateOrderData(
   orderId: string,
-  updates: Partial<any>
+  updates: Partial<PrintOrder>
 ): Promise<void> {
   const existingData = await getOrderData(orderId);
   if (!existingData) throw new Error('Order not found');

@@ -27,7 +27,9 @@ export interface PrintOrder {
     price: number;
   };
   spacing: number;
+  containMode: boolean;
   printFile?: Buffer;
+  previewUrl?: string;
   status: OrderStatus;
   createdAt: string;
   paymentId?: string;
@@ -38,40 +40,21 @@ export interface PrintOrder {
 
 export interface Order {
   id: string;
-  layout: {
-    images: Array<{
-      url: string;
-      alt?: string;
-      position: { x: number; y: number; w: number; h: number };
-      rotation: number;
-    }>;
-  };
-  printSize: {
+  status: string;
+  customerName: string;
+  email?: string;
+  shippingAddress: ShippingAddress;
+  shippingMethod: string;
+  items: OrderItem[];
+  boards?: PrintBoard[];
+  printSize?: {
     width: number;
     height: number;
+    name: string;
     price: number;
-    name?: string;
   };
-  status: OrderStatus;
-  createdAt: string;
-  printFile?: string;
-  previewUrl?: string;
-  email?: string;
-  customerEmail?: string;
-  paymentId?: string;
-  spacing: number;
-  containMode?: boolean;
-  shippingAddress?: {
-    name?: string;
-    line1: string;
-    line2?: string;
-    city: string;
-    state: string;
-    postal_code: string;
-    country: string;
-  };
-  trackingNumber?: string;
-  printJobCreatedAt?: string;
+  totalAmount: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PrintSize {
@@ -117,7 +100,48 @@ export interface Layout {
 
 export interface PrintJob {
   orderId: string;
-  printFile: string;
+  printFile: string | Buffer;
   printSize: PrintSize;
   customerEmail?: string;
+}
+
+export interface ShippingAddress {
+  name?: string;
+  street: string;
+  line1?: string;
+  line2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  postal_code?: string;
+  country: string;
+}
+
+export interface OrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface PrintBoard {
+  id: string;
+  images: string[];
+  size: string;
+}
+
+export interface OrderDetails {
+  items: OrderItem[];
+  boards?: PrintBoard[];
+}
+
+export interface OrderConfirmationEmailProps {
+  orderId: string;
+  customerName: string;
+  shippingAddress: ShippingAddress;
+  shippingMethod: string;
+  orderDetails: OrderDetails;
+  totalAmount: number;
+  order: Order;
+  metadata?: Record<string, unknown>;
 } 
