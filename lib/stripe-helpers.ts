@@ -1,6 +1,5 @@
 import { type PrintSize } from '@/app/types/order';
 import Stripe from 'stripe';
-import { type Order } from '@/app/types/order';
 
 const STRIPE_VARIANT_MAP = {
   '8.5x11': 'price_8x11',

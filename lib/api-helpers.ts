@@ -1,5 +1,3 @@
-import { PrintOrder } from '@/app/types/order';
-
 interface FetchOptions {
   headers?: Record<string, string>;
 }
@@ -7,7 +5,7 @@ interface FetchOptions {
 export async function fetchWithErrorHandling(
   url: string, 
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-  body?: any,
+  body?: Record<string, unknown>,
   options: FetchOptions = {}
 ) {
   const response = await fetch(url, {
@@ -16,7 +14,7 @@ export async function fetchWithErrorHandling(
       'Content-Type': 'application/json',
       ...options.headers
     },
-    ...(body && { body: JSON.stringify(body) })
+    ...(body && typeof body === 'object' ? { body: JSON.stringify(body) } : {})
   });
 
   if (!response.ok) {

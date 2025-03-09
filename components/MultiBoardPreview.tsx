@@ -139,7 +139,7 @@ const _generatePreview = async (board: Board) => {
   }
 };
 
-export function MultiBoardPreview({ 
+export default function MultiBoardPreview({ 
   isMultiMode,
   onMultiModeChange,
   _selectedBoards,
@@ -329,7 +329,7 @@ export function MultiBoardPreview({
 
       const initialSelectedIndices = data.images.length >= 4 
         ? [0, 1, 2, 3] 
-        : data.images.map((_: any, index: number) => index);
+        : data.images.map((_: unknown, index: number) => index);
 
       setBoards(prevBoards => {
         const newBoards = [...prevBoards];
@@ -351,7 +351,7 @@ export function MultiBoardPreview({
           selectedIndices: initialSelectedIndices,
           containMode: false,
           isPortrait: true,
-          scrapedImages: data.images.map((img: any) => ({
+          scrapedImages: data.images.map((img: ScrapedImage) => ({
             url: img.url,
             alt: img.alt || '',
             width: img.width,
@@ -1107,5 +1107,3 @@ export function MultiBoardPreview({
     </DndProvider>
   );
 }
-
-export default MultiBoardPreview;

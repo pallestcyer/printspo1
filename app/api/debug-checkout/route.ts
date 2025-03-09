@@ -28,6 +28,12 @@ interface CheckoutResponse {
   };
 }
 
+interface Board {
+  printSize: {
+    price: number;
+  };
+}
+
 export async function POST(request: Request) {
   try {
     console.log("Debug checkout endpoint called");
@@ -42,7 +48,7 @@ export async function POST(request: Request) {
       message: "Debug checkout successful",
       timestamp: new Date().toISOString(),
       receivedBoards: data.boards.length,
-      totalPrice: data.boards.reduce((sum: number, board: any) => sum + board.printSize.price, 0)
+      totalPrice: data.boards.reduce((sum: number, board: Board) => sum + board.printSize.price, 0)
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return NextResponse.json({

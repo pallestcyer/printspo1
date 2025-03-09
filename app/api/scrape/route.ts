@@ -602,7 +602,7 @@ function _validatePinterestUrl(url: string): boolean {
     // Valid board URLs: /{username}/{boardname}/
     const pathParts = path.split('/').filter(Boolean);
     return pathParts.length >= 2;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -836,16 +836,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
   } catch (_error) {
-    console.error('Pinterest scraper error:', _error);
-    
-    const errorMessage = _error instanceof Error 
-      ? `Failed to extract Pinterest images: ${_error.message}`
-      : 'Failed to import from Pinterest. Please check the URL and try again.';
-      
-    return NextResponse.json({
-      success: false,
-      error: errorMessage
-    }, { status: 500 });
+    console.error('Failed to scrape Pinterest board:', _error);
+    return NextResponse.json(
+      { error: 'Failed to scrape Pinterest board' },
+      { status: 500 }
+    );
   } finally {
     try {
       if (page) await page.close().catch(() => {});

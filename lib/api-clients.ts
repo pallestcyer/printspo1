@@ -1,10 +1,9 @@
 import Stripe from 'stripe';
 import { Resend } from 'resend';
 
-// Initialize Stripe
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2022-11-15',
-  typescript: true,
+// Initialize Stripe client
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2022-11-15'
 });
 
 // Initialize Resend
