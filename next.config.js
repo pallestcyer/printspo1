@@ -36,7 +36,8 @@ const nextConfig = {
       ];
     },
     experimental: {
-      serverComponentsExternalPackages: ['@sparticuz/chromium']
+      serverComponentsExternalPackages: ['@sparticuz/chromium'],
+      webpackBuildWorker: true
     },
     reactStrictMode: true,
     images: {
