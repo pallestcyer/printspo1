@@ -1,7 +1,7 @@
 import { kv } from '@vercel/kv';
-import { PrintOrder } from '@/app/types/order';
+import { type PrintOrder } from '../../../../app/types/order';
 import { notFound } from 'next/navigation';
-import { formatDate } from '@/lib/utils';
+import { formatDate, cn } from '../../../../lib/utils';
 
 export default async function TrackOrderPage({ 
   params: { orderId } 
