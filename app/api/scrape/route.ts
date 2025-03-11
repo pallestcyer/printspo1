@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import puppeteer from 'puppeteer-core';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import _cheerio from 'cheerio';
 import path from 'path';
@@ -19,10 +19,19 @@ const isDev = process.env.NODE_ENV === 'development';
 
 // Configure Chromium with minimal settings
 const chromiumConfig = {
-  args: chromium.args,
-  defaultViewport: chromium.defaultViewport,
-  executablePath: process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath(),
-  headless: chromium.headless,
+  args: [
+    ...chromium.args,
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-first-run',
+    '--no-zygote',
+    '--single-process',
+    '--disable-extensions'
+  ],
+  executablePath: await chromium.executablePath(),
+  headless: true,
   ignoreHTTPSErrors: true
 };
 
@@ -322,7 +331,7 @@ const extractImagesFromPage = () => {
 };
 
 // Define a proper autoScroll function that works with Puppeteer's Page type
-async function autoScroll(page: any): Promise<void> {
+async function autoScroll(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       let totalHeight = 0;
@@ -342,7 +351,7 @@ async function autoScroll(page: any): Promise<void> {
 }
 
 // Ensure images are fully loaded
-async function _ensureImagesLoaded(page: PuppeteerPage): Promise<void> {
+async function ensureImagesLoaded(page: Page): Promise<void> {
   console.log('Waiting for page to load completely');
   
   // First wait for page load
@@ -396,109 +405,42 @@ async function _ensureImagesLoaded(page: PuppeteerPage): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 1500));
 }
 
-// Browser initialization
-async function _getBrowser(): Promise<PuppeteerBrowser> {
+// Function to get browser instance
+async function getBrowser(): Promise<Browser> {
   try {
-    // Use local Chrome/Chromium in development mode for ease of debugging
-    if (isDev) {
-      console.log('Development environment detected, using local Chrome installation');
-      
-      // For Windows
-      const possibleWindowsPaths = [
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-      ];
-      
-      // For macOS
-      const possibleMacPaths = [
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
-      ];
-      
-      // For Linux
-      const possibleLinuxPaths = [
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/usr/bin/microsoft-edge'
-      ];
-      
-      // Combine all possible paths and check which one exists
-      const allPossiblePaths = [
-        ...possibleWindowsPaths,
-        ...possibleMacPaths,
-        ...possibleLinuxPaths
-      ];
-      
-      let executablePath = '';
-      for (const browserPath of allPossiblePaths) {
-        try {
-          if (fs.existsSync(browserPath)) {
-            executablePath = browserPath;
-            console.log(`Found browser at: ${executablePath}`);
-            break;
-          }
-        } catch (_err) {
-          // Continue checking
-        }
-      }
-      
-      if (!executablePath) {
-        console.warn('No local browser found, falling back to @sparticuz/chromium');
-        executablePath = await chromium.executablePath();
-      }
-      
-      console.log('Using browser at:', executablePath);
-      
-      const options = {
-        ...chromiumConfig,
-        executablePath,
-        defaultViewport: {
-          width: 1280,
-          height: 960
-        },
-        headless: "new" as const,
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false,
-        dumpio: true
-      };
-      
-      console.log('Launching browser with options:', JSON.stringify(options, null, 2));
-      const browser = await puppeteer.launch(options);
-      console.log('Browser launched successfully');
-      
-      return browser as unknown as PuppeteerBrowser;
+    if (isVercel) {
+      return await puppeteer.launch({
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process',
+          '--disable-extensions'
+        ],
+        executablePath: await chromium.executablePath(),
+        headless: true,
+        ignoreHTTPSErrors: true
+      });
     } else {
-      // Use Vercel's Chromium for production
-      const executablePath = await chromium.executablePath();
-      console.log('Production environment, using Chromium at:', executablePath);
-
-      const options = {
-        ...chromiumConfig,
-        executablePath,
-        defaultViewport: {
-          width: 1280,
-          height: 960
-        },
-        headless: "new" as const,
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false,
-        dumpio: true
-      };
-
-      console.log('Launching browser with options:', JSON.stringify(options, null, 2));
-      const browser = await puppeteer.launch(options);
-      console.log('Browser launched successfully');
-      
-      return browser as unknown as PuppeteerBrowser;
+      // Development configuration
+      return await puppeteer.launch({
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--headless=new'
+        ],
+        ignoreHTTPSErrors: true
+      });
     }
-  } catch (_error: unknown) {
-    console.error('Browser launch error:', _error instanceof Error ? _error.message : 'Unknown error');
-    throw new Error(`Failed to launch browser: ${_error instanceof Error ? _error.message : 'Unknown error'}`);
+  } catch (error) {
+    console.error('Failed to launch browser:', error);
+    throw error;
   }
 }
 
@@ -651,7 +593,7 @@ async function validateImages(images: PinterestImage[]): Promise<PinterestImage[
 
 // Main API handler
 export async function POST(req: Request) {
-  let browser: PuppeteerBrowser | null = null;
+  let browser: Browser | null = null;
   
   try {
     const { url } = await req.json();
@@ -664,7 +606,7 @@ export async function POST(req: Request) {
     }
 
     // Initialize browser
-    browser = await _getBrowser();
+    browser = await getBrowser();
     const page = await browser.newPage();
     
     // Set viewport and user agent
