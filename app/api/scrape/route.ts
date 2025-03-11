@@ -413,39 +413,24 @@ async function getBrowser(): Promise<Browser> {
       const executablePath = await chromium.executablePath();
       console.log('Chromium executable path:', executablePath);
 
-      // Verify executable exists
-      try {
-        const fs = require('fs');
-        const exists = fs.existsSync(executablePath);
-        console.log('Chromium executable exists:', exists);
-      } catch (error) {
-        console.error('Error checking executable:', error);
-      }
-
-      // Configure minimal Chrome flags
-      const minimalArgs = chromium.args.filter(arg => 
-        arg.startsWith('--no-sandbox') ||
-        arg.startsWith('--disable-setuid-sandbox') ||
-        arg.startsWith('--disable-dev-shm-usage')
-      );
-
+      // Configure minimal Chrome flags for memory efficiency
       const launchConfig = {
         args: [
-          ...minimalArgs,
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-dev-shm-usage',
-          '--no-zygote',
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--single-process'
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--no-zygote',
+          '--single-process',
+          '--js-flags="--max-old-space-size=512"'
         ],
         executablePath,
         headless: true as const,
         ignoreHTTPSErrors: true,
         defaultViewport: {
-          width: 1920,
-          height: 1080,
+          width: 1024,
+          height: 768,
           deviceScaleFactor: 1,
           isMobile: false,
           hasTouch: false,
@@ -463,15 +448,18 @@ async function getBrowser(): Promise<Browser> {
       } catch (launchError) {
         console.error('Browser launch error:', launchError);
         
-        // Try alternative launch configuration
+        // Try alternative launch configuration with even more minimal settings
         console.log('Trying alternative launch configuration...');
         const alternativeConfig = {
           ...launchConfig,
           args: [
             '--no-sandbox',
-            '--disable-setuid-sandbox'
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--js-flags="--max-old-space-size=384"'
           ],
-          ignoreDefaultArgs: ['--disable-extensions']
+          ignoreDefaultArgs: true
         };
         
         console.log('Alternative config:', JSON.stringify(alternativeConfig, null, 2));
@@ -664,7 +652,6 @@ export async function POST(req: Request) {
     }
 
     console.log('Initializing browser...');
-    // Initialize browser
     browser = await getBrowser();
     console.log('Browser initialized successfully');
 
@@ -674,9 +661,21 @@ export async function POST(req: Request) {
     
     // Set viewport and user agent
     console.log('Configuring page settings...');
-    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setViewport({ width: 1024, height: 768 });
     await page.setUserAgent(USER_AGENT);
     await page.setDefaultNavigationTimeout(_PAGE_LOAD_TIMEOUT);
+
+    // Configure page for memory efficiency
+    await page.evaluate(() => {
+      // Clear unused memory
+      if (window.gc) window.gc();
+      
+      // Limit memory usage
+      if ((performance as any).memory) {
+        (performance as any).memory.jsHeapSizeLimit = 512 * 1024 * 1024;
+      }
+    });
+
     console.log('Page settings configured');
 
     // Navigate to the URL
@@ -697,30 +696,25 @@ export async function POST(req: Request) {
     const images = await page.evaluate(extractImagesFromPage);
     console.log(`Found ${images?.length || 0} images`);
 
-    // Close browser
+    // Close browser immediately after use
     console.log('Closing browser...');
     await browser.close();
     browser = null;
     console.log('Browser closed successfully');
 
-    if (!images || images.length === 0) {
-      console.log('No images found');
-      return NextResponse.json(
-        { error: 'No images found' },
-        { status: 404 }
-      );
-    }
+    // Process only a reasonable number of images
+    const maxImages = Math.min(images?.length || 0, 20); // Limit to 20 images for memory efficiency
+    const processedImages = images?.slice(0, maxImages) || [];
 
     // Return the scraped images
-    console.log('Returning results...');
+    console.log(`Returning ${processedImages.length} images...`);
     return NextResponse.json({
-      images: images.slice(0, MAX_IMAGES),
+      images: processedImages,
       name: url.split('/').pop() || 'Pinterest Board'
     });
 
   } catch (error) {
     console.error('Scraping error:', error);
-    // Log more detailed error information
     if (error instanceof Error) {
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
