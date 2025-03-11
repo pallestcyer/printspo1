@@ -1,19 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "functions": {
-    "app/api/scrape/route": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  },
-  "build": {
-    "env": {
-      "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
-    }
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "env": {
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
   }
 } 

@@ -409,7 +409,10 @@ async function ensureImagesLoaded(page: Page): Promise<void> {
 async function getBrowser(): Promise<Browser> {
   try {
     if (isVercel) {
-      return await puppeteer.launch({
+      // Use specific configuration for Vercel environment
+      const executablePath = await chromium.executablePath();
+      
+      const browser = await puppeteer.launch({
         args: [
           ...chromium.args,
           '--no-sandbox',
@@ -419,12 +422,27 @@ async function getBrowser(): Promise<Browser> {
           '--no-first-run',
           '--no-zygote',
           '--single-process',
-          '--disable-extensions'
+          '--disable-extensions',
+          '--disable-software-rasterizer'
         ],
-        executablePath: await chromium.executablePath(),
-        headless: true,
-        ignoreHTTPSErrors: true
+        executablePath,
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+        defaultViewport: {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+          isMobile: false,
+          hasTouch: false,
+          isLandscape: true
+        }
       });
+
+      // Verify browser launched successfully
+      const version = await browser.version();
+      console.log('Browser version:', version);
+      
+      return browser;
     } else {
       // Development configuration
       return await puppeteer.launch({
@@ -596,6 +614,7 @@ export async function POST(req: Request) {
   let browser: Browser | null = null;
   
   try {
+    console.log('Starting scraping process...');
     const { url } = await req.json();
     
     if (!url) {
@@ -605,32 +624,48 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log('Initializing browser...');
     // Initialize browser
     browser = await getBrowser();
+    console.log('Browser initialized successfully');
+
+    console.log('Creating new page...');
     const page = await browser.newPage();
+    console.log('Page created successfully');
     
     // Set viewport and user agent
+    console.log('Configuring page settings...');
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent(USER_AGENT);
     await page.setDefaultNavigationTimeout(_PAGE_LOAD_TIMEOUT);
+    console.log('Page settings configured');
 
     // Navigate to the URL
+    console.log(`Navigating to URL: ${url}`);
     await page.goto(url, {
       waitUntil: 'networkidle0',
       timeout: _PAGE_LOAD_TIMEOUT
     });
+    console.log('Navigation complete');
 
     // Wait for images to load
+    console.log('Waiting for images to load...');
     await page.waitForSelector('img', { timeout: IMAGE_SELECTOR_TIMEOUT });
+    console.log('Images loaded');
 
     // Extract images using client-side script
+    console.log('Extracting images...');
     const images = await page.evaluate(extractImagesFromPage);
+    console.log(`Found ${images?.length || 0} images`);
 
     // Close browser
+    console.log('Closing browser...');
     await browser.close();
     browser = null;
+    console.log('Browser closed successfully');
 
     if (!images || images.length === 0) {
+      console.log('No images found');
       return NextResponse.json(
         { error: 'No images found' },
         { status: 404 }
@@ -638,6 +673,7 @@ export async function POST(req: Request) {
     }
 
     // Return the scraped images
+    console.log('Returning results...');
     return NextResponse.json({
       images: images.slice(0, MAX_IMAGES),
       name: url.split('/').pop() || 'Pinterest Board'
@@ -645,16 +681,25 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error('Scraping error:', error);
+    // Log more detailed error information
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return NextResponse.json(
       { 
         error: 'Failed to scrape Pinterest board',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
+        type: error instanceof Error ? error.name : 'Unknown'
       },
       { status: 500 }
     );
   } finally {
     if (browser) {
+      console.log('Cleaning up browser in finally block...');
       await browser.close().catch(console.error);
+      console.log('Browser cleanup complete');
     }
   }
 }
