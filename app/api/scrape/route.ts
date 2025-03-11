@@ -19,22 +19,11 @@ const isDev = process.env.NODE_ENV === 'development';
 
 // Configure Chromium with minimal settings
 const chromiumConfig = {
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--headless=new',
-    '--disable-web-security',
-    '--disable-features=IsolateOrigins',
-    '--disable-site-isolation-trials',
-    '--no-zygote',
-    '--single-process',
-    '--disable-extensions'
-  ],
-  ignoreDefaultArgs: ['--enable-automation'],
-  ignoreHTTPSErrors: true,
-  pipe: true // Use pipe instead of WebSocket
+  args: chromium.args,
+  defaultViewport: chromium.defaultViewport,
+  executablePath: process.env.CHROME_EXECUTABLE_PATH || await chromium.executablePath(),
+  headless: chromium.headless,
+  ignoreHTTPSErrors: true
 };
 
 if (isVercel) {
@@ -661,192 +650,69 @@ async function validateImages(images: PinterestImage[]): Promise<PinterestImage[
 }
 
 // Main API handler
-export async function POST(request: Request): Promise<NextResponse> {
-  let browser = null;
-  let page = null;
+export async function POST(req: Request) {
+  let browser: PuppeteerBrowser | null = null;
   
   try {
-    console.log('Starting Pinterest scraping process');
-    const { url } = await request.json();
+    const { url } = await req.json();
     
-    if (!url || typeof url !== 'string') {
+    if (!url) {
       return NextResponse.json(
-        { success: false, error: 'URL is required' },
+        { error: 'URL is required' },
         { status: 400 }
       );
     }
 
-    // Validate Pinterest URL
-    if (!url.includes('pinterest.com') && !url.includes('pin.it')) {
+    // Initialize browser
+    browser = await _getBrowser();
+    const page = await browser.newPage();
+    
+    // Set viewport and user agent
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent(USER_AGENT);
+    await page.setDefaultNavigationTimeout(_PAGE_LOAD_TIMEOUT);
+
+    // Navigate to the URL
+    await page.goto(url, {
+      waitUntil: 'networkidle0',
+      timeout: _PAGE_LOAD_TIMEOUT
+    });
+
+    // Wait for images to load
+    await page.waitForSelector('img', { timeout: IMAGE_SELECTOR_TIMEOUT });
+
+    // Extract images using client-side script
+    const images = await page.evaluate(extractImagesFromPage);
+
+    // Close browser
+    await browser.close();
+    browser = null;
+
+    if (!images || images.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Invalid Pinterest URL' },
-        { status: 400 }
+        { error: 'No images found' },
+        { status: 404 }
       );
     }
 
-    // Expand shortened URL if needed
-    const fullUrl = url.includes('pin.it') 
-      ? await expandShortUrl(url) 
-      : url;
-    
-    console.log('Processing URL:', fullUrl);
-    
-    // Get browser executable path
-    let executablePath;
-    if (isDev) {
-      // In development, use local Chrome
-      executablePath = process.platform === 'win32' 
-        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-        : process.platform === 'darwin'
-          ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-          : '/usr/bin/google-chrome';
-    } else {
-      // In production (Vercel), use bundled Chromium
-      executablePath = await chromium.executablePath();
-    }
-    
-    // Launch browser with appropriate options
-    const launchOptions = {
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--headless=new',
-        '--disable-web-security',
-      ],
-      executablePath,
-      headless: true,
-      defaultViewport: { width: 1280, height: 800 }
-    };
-    
-    console.log('Launching browser...');
-    browser = await puppeteer.launch(launchOptions);
-    
-    console.log('Creating new page...');
-    page = await browser.newPage();
-    
-    // Set user agent to mimic a real browser
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-    );
-    
-    // Set longer timeout for navigation
-    await page.setDefaultNavigationTimeout(30000);
-    
-    console.log('Navigating to Pinterest URL...');
-    await page.goto(fullUrl, { 
-      waitUntil: 'domcontentloaded', // Use domcontentloaded instead of networkidle2 for faster initial load
-      timeout: 30000
-    });
-
-    console.log('Extracting initial images...');
-    // Extract initial images as soon as possible
-    const initialImages = await page.evaluate(extractImagesFromPage);
-    console.log(`Found ${initialImages.length} initial images`);
-    
-    // Get board name from URL
-    const boardName = extractBoardName(fullUrl);
-    
-    // Properly close browser before returning initial results
-    if (initialImages.length >= 10) {
-      console.log('Returning initial batch of images');
-      
-      // Close browser resources properly
-      try {
-        if (page) await page.close().catch(() => {});
-        page = null;
-        if (browser) await browser.close().catch(() => {});
-        browser = null;
-      } catch (_e) {
-        console.error('Error during initial cleanup:', _e);
-      }
-      
-      // Validate the initial images to ensure they're accessible
-      const validatedInitialImages = await validateImages(initialImages);
-      console.log(`Validated ${validatedInitialImages.length} initial images`);
-      
-      return NextResponse.json({
-        success: true,
-        name: boardName,
-        images: validatedInitialImages,
-        complete: false, // Indicate this is a partial result
-        count: validatedInitialImages.length
-      });
-    }
-    
-    // Otherwise, continue loading more images
-    console.log('Not enough initial images, continuing to load more...');
-    
-    // Wait a bit for more content to load
-    await page.waitForTimeout(1500);
-    
-    // Get pin count if available
-    const pinCount = await page.evaluate(() => {
-      const pinCountElement = document.querySelector('[data-test-id="pin-count"]');
-      if (pinCountElement) {
-        const text = pinCountElement.textContent || '';
-        const match = text.match(/(\d+)/);
-        return match ? parseInt(match[1], 10) : 0;
-      }
-      return 0;
-    });
-    
-    console.log(`Board has approximately ${pinCount} pins`);
-    
-    // Scroll to load more pins if needed
-    if (pinCount > initialImages.length) {
-      console.log('Scrolling to load more pins...');
-      await autoScroll(page);
-    }
-    
-    // Extract all images after scrolling
-    const allImages = await page.evaluate(extractImagesFromPage);
-    console.log(`Found ${allImages.length} total images after scrolling`);
-    
-    // Close browser resources
-    try {
-      if (page) await page.close().catch(() => {});
-      page = null;
-      if (browser) await browser.close().catch(() => {});
-      browser = null;
-    } catch (_e) {
-      console.error('Error during cleanup:', _e);
-    }
-    
-    if (!allImages || allImages.length === 0) {
-      throw new Error('No images found on the Pinterest board');
-    }
-
-    // Validate images
-    const validatedImages = await validateImages(allImages);
-    console.log(`Validated ${validatedImages.length} images`);
-    
-    if (validatedImages.length === 0) {
-      throw new Error('No valid images found on the Pinterest board');
-    }
-    
-    console.log('Successfully completed scraping process');
+    // Return the scraped images
     return NextResponse.json({
-      success: true,
-      name: boardName,
-      images: validatedImages,
-      complete: true,
-      count: validatedImages.length
+      images: images.slice(0, MAX_IMAGES),
+      name: url.split('/').pop() || 'Pinterest Board'
     });
 
-  } catch (_error) {
-    console.error('Failed to scrape Pinterest board:', _error);
+  } catch (error) {
+    console.error('Scraping error:', error);
     return NextResponse.json(
-      { error: 'Failed to scrape Pinterest board' },
+      { 
+        error: 'Failed to scrape Pinterest board',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   } finally {
-    try {
-      if (page) await page.close().catch(() => {});
-      if (browser) await browser.close().catch(() => {});
-    } catch (_err) {
-      console.error('Error during final cleanup:', _err);
+    if (browser) {
+      await browser.close().catch(console.error);
     }
   }
 }
