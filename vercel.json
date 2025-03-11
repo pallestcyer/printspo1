@@ -4,6 +4,13 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "env": {
-    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
+    "CHROME_PATH": "/tmp/chromium"
+  },
+  "functions": {
+    "app/api/scrape/route.ts": {
+      "memory": 3008,
+      "maxDuration": 60
+    }
   }
 } 

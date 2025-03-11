@@ -411,22 +411,37 @@ async function getBrowser(): Promise<Browser> {
     if (isVercel) {
       // Use specific configuration for Vercel environment
       const executablePath = await chromium.executablePath();
-      
-      const browser = await puppeteer.launch({
+      console.log('Chromium executable path:', executablePath);
+
+      // Verify executable exists
+      try {
+        const fs = require('fs');
+        const exists = fs.existsSync(executablePath);
+        console.log('Chromium executable exists:', exists);
+      } catch (error) {
+        console.error('Error checking executable:', error);
+      }
+
+      // Configure minimal Chrome flags
+      const minimalArgs = chromium.args.filter(arg => 
+        arg.startsWith('--no-sandbox') ||
+        arg.startsWith('--disable-setuid-sandbox') ||
+        arg.startsWith('--disable-dev-shm-usage')
+      );
+
+      const launchConfig = {
         args: [
-          ...chromium.args,
+          ...minimalArgs,
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-dev-shm-usage',
+          '--no-zygote',
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-extensions',
-          '--disable-software-rasterizer'
+          '--single-process'
         ],
         executablePath,
-        headless: chromium.headless,
+        headless: true as const,
         ignoreHTTPSErrors: true,
         defaultViewport: {
           width: 1920,
@@ -436,13 +451,32 @@ async function getBrowser(): Promise<Browser> {
           hasTouch: false,
           isLandscape: true
         }
-      });
+      };
 
-      // Verify browser launched successfully
-      const version = await browser.version();
-      console.log('Browser version:', version);
-      
-      return browser;
+      console.log('Launch config:', JSON.stringify(launchConfig, null, 2));
+
+      try {
+        const browser = await puppeteer.launch(launchConfig);
+        const version = await browser.version();
+        console.log('Browser launched successfully, version:', version);
+        return browser;
+      } catch (launchError) {
+        console.error('Browser launch error:', launchError);
+        
+        // Try alternative launch configuration
+        console.log('Trying alternative launch configuration...');
+        const alternativeConfig = {
+          ...launchConfig,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox'
+          ],
+          ignoreDefaultArgs: ['--disable-extensions']
+        };
+        
+        console.log('Alternative config:', JSON.stringify(alternativeConfig, null, 2));
+        return await puppeteer.launch(alternativeConfig);
+      }
     } else {
       // Development configuration
       return await puppeteer.launch({
@@ -458,6 +492,11 @@ async function getBrowser(): Promise<Browser> {
     }
   } catch (error) {
     console.error('Failed to launch browser:', error);
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     throw error;
   }
 }
