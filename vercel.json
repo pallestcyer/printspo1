@@ -2,10 +2,10 @@
   "version": 2,
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm run build",
+  "buildCommand": "yum install -y amazon-linux-extras && amazon-linux-extras install epel -y && yum install -y chromium chromium-headless chromium-libs nss cups-libs atk at-spi2-atk gtk3 && npm run build",
   "env": {
     "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
-    "CHROME_PATH": "/tmp/chromium"
+    "CHROME_PATH": "/usr/bin/chromium-browser"
   },
   "functions": {
     "app/api/scrape/route.ts": {

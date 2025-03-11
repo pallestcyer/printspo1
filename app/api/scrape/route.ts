@@ -409,28 +409,35 @@ async function ensureImagesLoaded(page: Page): Promise<void> {
 async function getBrowser(): Promise<Browser> {
   try {
     if (isVercel) {
-      // Use specific configuration for Vercel environment
-      const executablePath = await chromium.executablePath();
-      console.log('Chromium executable path:', executablePath);
+      console.log('Running in Vercel environment');
+      
+      // Use system-installed Chrome
+      const executablePath = process.env.CHROME_PATH || '/usr/bin/chromium-browser';
+      console.log('Using Chrome at:', executablePath);
 
-      // Configure minimal Chrome flags for memory efficiency
+      // Minimal launch configuration
       const launchConfig = {
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
+          '--headless',
           '--disable-software-rasterizer',
+          '--disable-extensions',
           '--no-zygote',
           '--single-process',
-          '--js-flags="--max-old-space-size=512"'
+          '--hide-scrollbars',
+          '--mute-audio',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
         ],
         executablePath,
         headless: true as const,
         ignoreHTTPSErrors: true,
         defaultViewport: {
-          width: 1024,
-          height: 768,
+          width: 800,
+          height: 600,
           deviceScaleFactor: 1,
           isMobile: false,
           hasTouch: false,
@@ -441,23 +448,21 @@ async function getBrowser(): Promise<Browser> {
       console.log('Launch config:', JSON.stringify(launchConfig, null, 2));
 
       try {
+        console.log('Attempting to launch browser...');
         const browser = await puppeteer.launch(launchConfig);
         const version = await browser.version();
         console.log('Browser launched successfully, version:', version);
         return browser;
       } catch (launchError) {
-        console.error('Browser launch error:', launchError);
+        console.error('Initial browser launch failed:', launchError);
         
-        // Try alternative launch configuration with even more minimal settings
+        // Try alternative configuration
         console.log('Trying alternative launch configuration...');
         const alternativeConfig = {
           ...launchConfig,
           args: [
             '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--js-flags="--max-old-space-size=384"'
+            '--disable-setuid-sandbox'
           ],
           ignoreDefaultArgs: true
         };
@@ -484,6 +489,15 @@ async function getBrowser(): Promise<Browser> {
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
+
+      // Check if Chrome exists
+      try {
+        const { execSync } = require('child_process');
+        const chromeVersion = execSync('chromium-browser --version').toString();
+        console.log('Chrome version:', chromeVersion);
+      } catch (versionError) {
+        console.error('Failed to get Chrome version:', versionError);
+      }
     }
     throw error;
   }
