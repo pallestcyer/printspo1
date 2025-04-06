@@ -9,36 +9,25 @@ import fs from 'fs';
 
 // Configure route options
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const preferredRegion = 'iad1';
-export const maxDuration = 60;
+export const preferredRegion = 'auto';
+export const fetchCache = 'force-no-store';
 
 // Determine environment
 const isVercel = process.env.VERCEL === '1';
 const isDev = process.env.NODE_ENV === 'development';
 
-// Configure Chromium with minimal settings
-const chromiumConfig = {
-  args: [
-    ...chromium.args,
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--no-first-run',
-    '--no-zygote',
-    '--single-process',
-    '--disable-extensions'
-  ],
-  executablePath: await chromium.executablePath(),
-  headless: true,
-  ignoreHTTPSErrors: true
-};
+// Configure Chromium
+chromium.setHeadlessMode = true;
+chromium.setGraphicsMode = false;
 
-if (isVercel) {
-  chromium.setGraphicsMode = false;
-  chromium.setHeadlessMode = true;
-}
+// User agent to mimic a regular browser
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// Timeouts
+const _PAGE_LOAD_TIMEOUT = 30000;
+const IMAGE_SELECTOR_TIMEOUT = 15000;
+const PINTEREST_DOMAIN = 'pinterest.com';
+const SHORT_URL_DOMAIN = 'pin.it';
 
 // Interfaces
 interface PuppeteerPage {
@@ -109,9 +98,6 @@ const MAX_IMAGES = 100;
 const _MAX_RETRIES = 3;
 const _RETRY_DELAY = 1000;
 const _SCROLL_TIMEOUT = 15000;
-const _PAGE_LOAD_TIMEOUT = 30000;
-const IMAGE_SELECTOR_TIMEOUT = 10000;
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 // Main image extraction function
 const extractImagesFromPage = () => {
@@ -407,100 +393,139 @@ async function ensureImagesLoaded(page: Page): Promise<void> {
 
 // Function to get browser instance
 async function getBrowser(): Promise<Browser> {
-  try {
-    if (isVercel) {
-      console.log('Running in Vercel environment');
-      
-      // Use system-installed Chrome
-      const executablePath = process.env.CHROME_PATH || '/usr/bin/chromium-browser';
-      console.log('Using Chrome at:', executablePath);
+  // For tracking attempts
+  let attemptCount = 0;
+  const maxAttempts = 3;
+  
+  // Last error for reporting
+  let lastError: Error | null = null;
 
-      // Minimal launch configuration
-      const launchConfig = {
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--headless',
-          '--disable-software-rasterizer',
-          '--disable-extensions',
-          '--no-zygote',
-          '--single-process',
-          '--hide-scrollbars',
-          '--mute-audio',
-          '--disable-web-security',
-          '--disable-features=IsolateOrigins,site-per-process'
-        ],
-        executablePath,
-        headless: true as const,
-        ignoreHTTPSErrors: true,
+  while (attemptCount < maxAttempts) {
+    attemptCount++;
+    console.log(`Browser initialization attempt ${attemptCount}/${maxAttempts}`);
+
+    try {
+      console.log('Initializing browser...');
+      
+      // Common configuration for both environments
+      let launchOptions: any = {
         defaultViewport: {
-          width: 800,
-          height: 600,
+          width: 1024,
+          height: 768,
           deviceScaleFactor: 1,
           isMobile: false,
           hasTouch: false,
           isLandscape: true
-        }
+        },
+        ignoreHTTPSErrors: true
       };
-
-      console.log('Launch config:', JSON.stringify(launchConfig, null, 2));
-
-      try {
-        console.log('Attempting to launch browser...');
-        const browser = await puppeteer.launch(launchConfig);
-        const version = await browser.version();
-        console.log('Browser launched successfully, version:', version);
-        return browser;
-      } catch (launchError) {
-        console.error('Initial browser launch failed:', launchError);
+      
+      if (isVercel) {
+        console.log('Running in Vercel environment with @sparticuz/chromium');
         
-        // Try alternative configuration
-        console.log('Trying alternative launch configuration...');
-        const alternativeConfig = {
-          ...launchConfig,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox'
-          ],
-          ignoreDefaultArgs: true
+        // Set up Chromium-specific args for Vercel
+        launchOptions = {
+          ...launchOptions,
+          args: chromium.args,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless
         };
         
-        console.log('Alternative config:', JSON.stringify(alternativeConfig, null, 2));
-        return await puppeteer.launch(alternativeConfig);
+        console.log('Launch options:', JSON.stringify({
+          ...launchOptions,
+          executablePath: launchOptions.executablePath ? '[REDACTED_PATH]' : undefined
+        }, null, 2));
+        
+        try {
+          console.log('Launching browser with @sparticuz/chromium configuration...');
+          const browser = await puppeteer.launch(launchOptions);
+          const version = await browser.version();
+          console.log('Browser launched successfully, version:', version);
+          return browser;
+        } catch (error) {
+          console.error('First browser launch attempt failed, trying minimal configuration...', error);
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          if (attemptCount < maxAttempts) {
+            // Fallback with minimal configuration - less features but more likely to work
+            const minimalOptions = {
+              args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--single-process'
+              ],
+              executablePath: await chromium.executablePath(),
+              headless: true,
+              ignoreHTTPSErrors: true
+            };
+            
+            console.log('Trying minimal launch options:', JSON.stringify({
+              ...minimalOptions,
+              executablePath: minimalOptions.executablePath ? '[REDACTED_PATH]' : undefined
+            }, null, 2));
+            
+            try {
+              const browser = await puppeteer.launch(minimalOptions);
+              const version = await browser.version();
+              console.log('Browser launched successfully with minimal config, version:', version);
+              return browser;
+            } catch (minimalError) {
+              console.error('Minimal configuration failed:', minimalError);
+              lastError = minimalError instanceof Error ? minimalError : new Error(String(minimalError));
+              
+              // Wait before retrying
+              console.log(`Waiting before retry ${attemptCount + 1}...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue;
+            }
+          }
+          
+          throw error;
+        }
+      } else {
+        // Development configuration
+        const devOptions = {
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--headless=new'
+          ],
+          ignoreHTTPSErrors: true,
+          ...launchOptions
+        };
+        
+        console.log('Development mode browser options:', JSON.stringify(devOptions, null, 2));
+        return await puppeteer.launch(devOptions);
       }
-    } else {
-      // Development configuration
-      return await puppeteer.launch({
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--headless=new'
-        ],
-        ignoreHTTPSErrors: true
-      });
-    }
-  } catch (error) {
-    console.error('Failed to launch browser:', error);
-    if (error instanceof Error) {
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-
-      // Check if Chrome exists
-      try {
-        const { execSync } = require('child_process');
-        const chromeVersion = execSync('chromium-browser --version').toString();
-        console.log('Chrome version:', chromeVersion);
-      } catch (versionError) {
-        console.error('Failed to get Chrome version:', versionError);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Browser launch attempt ${attemptCount} failed:`, error);
+      
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
       }
+      
+      // If we've reached max attempts, throw the error
+      if (attemptCount >= maxAttempts) {
+        console.error(`All ${maxAttempts} browser launch attempts failed`);
+        throw new Error(`Failed to launch browser after ${maxAttempts} attempts: ${lastError?.message}`);
+      }
+      
+      // Wait before retrying
+      const retryDelay = Math.pow(2, attemptCount) * 500; // Exponential backoff
+      console.log(`Retrying in ${retryDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
-    throw error;
   }
+  
+  // This should never be reached due to the throw in the loop, but TypeScript needs it
+  throw new Error(`Failed to launch browser after ${maxAttempts} attempts`);
 }
 
 // Verify image URL is valid
@@ -666,8 +691,27 @@ export async function POST(req: Request) {
     }
 
     console.log('Initializing browser...');
-    browser = await getBrowser();
-    console.log('Browser initialized successfully');
+    
+    try {
+      browser = await getBrowser();
+      console.log('Browser initialized successfully');
+    } catch (browserError) {
+      console.error('Browser initialization error:', browserError);
+      return NextResponse.json(
+        { 
+          error: 'Failed to initialize browser',
+          details: browserError instanceof Error ? browserError.message : 'Unknown browser error',
+          environment: {
+            isVercel: isVercel ? 'true' : 'false',
+            nodeEnv: process.env.NODE_ENV || 'unknown',
+            runtime: process.version || 'unknown',
+            platform: process.platform || 'unknown',
+            arch: process.arch || 'unknown'
+          }
+        },
+        { status: 500 }
+      );
+    }
 
     console.log('Creating new page...');
     const page = await browser.newPage();
@@ -728,25 +772,39 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error('Scraping error:', error);
-    if (error instanceof Error) {
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+    console.error('Scraping failed:', error);
+    
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error('Error closing browser:', closeError);
+      }
     }
+    
     return NextResponse.json(
       { 
-        error: 'Failed to scrape Pinterest board',
+        error: 'Failed to process Pinterest URL', 
         details: error instanceof Error ? error.message : 'Unknown error',
-        type: error instanceof Error ? error.name : 'Unknown'
+        errorType: error instanceof Error ? error.name : 'Unknown',
+        environment: {
+          isVercel: isVercel ? 'true' : 'false',
+          nodeEnv: process.env.NODE_ENV || 'unknown',
+          runtime: process.version || 'unknown',
+          platform: process.platform || 'unknown',
+          arch: process.arch || 'unknown'
+        }
       },
       { status: 500 }
     );
   } finally {
     if (browser) {
-      console.log('Cleaning up browser in finally block...');
-      await browser.close().catch(console.error);
-      console.log('Browser cleanup complete');
+      try {
+        await browser.close();
+        console.log('Browser closed');
+      } catch (err) {
+        console.error('Error closing browser:', err);
+      }
     }
   }
 }

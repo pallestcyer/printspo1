@@ -2,14 +2,14 @@
   "version": 2,
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "yum install -y amazon-linux-extras && amazon-linux-extras install epel -y && yum install -y chromium chromium-headless chromium-libs nss cups-libs atk at-spi2-atk gtk3 && npm run build",
+  "buildCommand": "yum install -y atk cups-libs gtk3 at-spi2-atk libdrm libXcomposite libXdamage libXrandr alsa-lib pango mesa-libgbm libxkbcommon libxshmfence nss nspr libX11 libXext libXfixes && npm run build",
   "env": {
     "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
-    "CHROME_PATH": "/usr/bin/chromium-browser"
+    "NODE_OPTIONS": "--max_old_space_size=4096"
   },
   "functions": {
     "app/api/scrape/route.ts": {
-      "memory": 1024,
+      "memory": 3008,
       "maxDuration": 60
     }
   }

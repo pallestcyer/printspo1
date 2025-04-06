@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    transpilePackages: ['puppeteer-core'],
+    transpilePackages: ['puppeteer-core', '@sparticuz/chromium'],
     webpack: (config, { isServer }) => {
       // Handle ESM modules
       config.resolve.extensionAlias = {
@@ -9,15 +9,36 @@ const nextConfig = {
 
       // Suppress punycode warning
       config.ignoreWarnings = [
-        { module: /node_modules\/punycode/ }
+        { module: /node_modules\/punycode/ },
+        // Ignore Chromium download warning
+        { message: /.*Chromium download may fail.*/i },
+        // Ignore missing optional dependencies
+        { message: /.*Can't resolve '(utf-8-validate|bufferutil)'.*/i }
       ];
-
+      
+      // Handle server-side specific modules
       if (isServer) {
-        // Ignore source maps
-        config.module.rules.push({
-          test: /\.map$/,
-          use: ['ignore-loader']
-        });
+        // Avoid bundling non-Node.js specific modules on the server
+        config.externals.push(
+          'puppeteer-core',
+          '@sparticuz/chromium',
+          {
+            'utf-8-validate': 'commonjs utf-8-validate',
+            'bufferutil': 'commonjs bufferutil',
+          }
+        );
+      }
+      
+      // Fix for client-side polyfills
+      if (!isServer) {
+        config.resolve.fallback = {
+          ...config.resolve.fallback,
+          fs: false,
+          path: false,
+          crypto: false,
+          stream: false,
+          buffer: false,
+        };
       }
 
       return config;
@@ -36,8 +57,8 @@ const nextConfig = {
       ];
     },
     experimental: {
-      serverComponentsExternalPackages: ['@sparticuz/chromium'],
-      webpackBuildWorker: true
+      serverComponentsExternalPackages: ['@sparticuz/chromium', 'puppeteer-core', 'puppeteer'],
+      instrumentationHook: true,
     },
     reactStrictMode: true,
     images: {
